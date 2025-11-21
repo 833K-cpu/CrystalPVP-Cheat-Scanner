@@ -1,7 +1,10 @@
 @echo off
-title Crystal PVP Jar Scanner
+chcp 65001 >nul
+title Minecraft Cheat Scanner
+cls
+
 echo ========================================
-echo    Crystal PVP Cheat Scanner
+echo    Minecraft Cheat Scanner
 echo ========================================
 echo.
 echo This scanner will:
@@ -14,9 +17,18 @@ echo Examples of Minecraft paths:
 echo - Default: C:\Users\YourName\AppData\Roaming\.minecraft
 echo - MultiMC: C:\Users\YourName\Desktop\MultiMC\instances\...
 echo - Lunar Client: C:\Users\YourName\.lunarclient\offline\...
-echo - Badlion Client: C:\Users\YourName\AppData\Roaming\.badlionclient\.minecraft
+echo - Badlion: C:\Users\YourName\AppData\Roaming\.badlionclient\.minecraft
 echo.
 echo Press any key to start the scan...
 pause >nul
 
+echo.
+echo Downloading and starting scanner...
+echo.
+
 powershell -ExecutionPolicy Bypass -Command "& {Invoke-RestMethod 'https://raw.githubusercontent.com/DEIN_USERNAME/CrystalPVP-Cheat-Scanner/main/CrystalPVPJarScanner.ps1' | Invoke-Expression}"
+
+echo.
+echo ========================================
+echo Scan completed!
+pause
