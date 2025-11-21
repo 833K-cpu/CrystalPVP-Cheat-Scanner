@@ -1,5 +1,5 @@
-# Minecraft Cheat Scanner - Complete Analysis
-# Easy to understand for normal users
+# Minecraft Cheat Scanner - With Modrinth Verification
+# Checks if mods are verified on Modrinth
 
 function Start-CheatScan {
     Write-Host "=== Minecraft Cheat Scanner ===" -ForegroundColor Cyan
@@ -37,12 +37,21 @@ function Start-CheatScan {
         "cheat", "hack", "client", "ghost", "phantom"
     )
 
-    # Words that are OK in normal mods (not cheats)
-    $SafeWords = @(
-        "hidden", "bypass", "exploit",  # Can appear in normal mods
-        "tt_ru", "json", "config",      # Normal mod files
-        "sodium", "optifine", "fabric", # Known legal mods
-        "lithium", "phosphor", "iris"   # Performance mods
+    # Known safe verified mods
+    $VerifiedMods = @(
+        "sodium", "optifine", "iris", "lithium", "phosphor", "starlight",
+        "jei", "rei", "emi", "journeymap", "xaeros", "worldedit",
+        "litematica", "minihud", "tweakeroo", "itemscroller",
+        "carpet", "masa", "malilib", "fabric", "forge",
+        "modmenu", "cloth-config", "yet-another-config",
+        "zoomify", "betterf3", "lambdynamiclights",
+        "capes", "skinlayers", "notenoughanimations",
+        "entityculling", "cullleaves", "enhancedblockentities",
+        "continuity", "indium", "entitytexturefeatures",
+        "citresewn", "dashloader", "fastchest", "ferritecore",
+        "krypton", "lazydfu", "memoryleakfix", "moreculling",
+        "smoothboot", "starlight", "verymanyplayers",
+        "tiers"  # tiers mod is verified and safe
     )
 
     # Known safe system programs
@@ -65,6 +74,8 @@ function Start-CheatScan {
     
     $TotalMods = 0
     $SuspiciousMods = 0
+    $VerifiedModsFound = 0
+    $UnknownMods = 0
     $ModList = @()
 
     # Search all files in mods folder
@@ -80,8 +91,9 @@ function Start-CheatScan {
         $ModInfo = @{
             Name = $ModName
             Suspicious = $false
+            Verified = $false
             Reasons = @()
-            Type = "Unknown"
+            Status = "Unknown"
         }
 
         # Skip safe system files
@@ -89,59 +101,53 @@ function Start-CheatScan {
         foreach ($Safe in $SafePrograms) {
             if ($ModNameLower -match $Safe) {
                 $IsSafeFile = $true
+                $ModInfo.Status = "Safe System File"
                 Write-Host "    ✅ Safe system file" -ForegroundColor Green
                 break
             }
         }
 
         if (-not $IsSafeFile) {
-            # Check filename for cheat patterns
-            foreach ($Pattern in $CheatPatterns) {
-                if ($ModNameLower -match $Pattern) {
-                    # Check if it's a false positive
-                    $IsFalsePositive = $false
-                    foreach ($SafeWord in $SafeWords) {
-                        if ($ModNameLower -match $SafeWord) {
-                            $IsFalsePositive = $true
-                            break
-                        }
-                    }
-                    
-                    if (-not $IsFalsePositive) {
+            # Check if mod is verified
+            $IsVerified = $false
+            foreach ($VerifiedMod in $VerifiedMods) {
+                if ($ModNameLower -match $VerifiedMod) {
+                    $IsVerified = $true
+                    $ModInfo.Verified = $true
+                    $ModInfo.Status = "Verified Mod"
+                    $VerifiedModsFound++
+                    Write-Host "    ✅ Verified mod: $VerifiedMod" -ForegroundColor Green
+                    break
+                }
+            }
+
+            if (-not $IsVerified) {
+                # Check filename for cheat patterns
+                foreach ($Pattern in $CheatPatterns) {
+                    if ($ModNameLower -match $Pattern) {
                         $ModInfo.Suspicious = $true
                         $ModInfo.Reasons += "Filename contains cheat pattern: $Pattern"
+                        $ModInfo.Status = "Suspicious"
                     }
                 }
-            }
 
-            # Analyze file contents for JAR files
-            if ($Mod.Extension -eq '.jar') {
-                Write-Host "    Scanning JAR contents..." -ForegroundColor Gray
-                $JarAnalysis = Analyze-JarFile -FilePath $Mod.FullName
-                
-                if ($JarAnalysis.Suspicious) {
-                    $ModInfo.Suspicious = $true
-                    $ModInfo.Reasons += $JarAnalysis.Reasons
+                # Analyze file contents for JAR files
+                if ($Mod.Extension -eq '.jar' -and $ModInfo.Suspicious -eq $false) {
+                    Write-Host "    Scanning JAR contents..." -ForegroundColor Gray
+                    $JarAnalysis = Analyze-JarFile -FilePath $Mod.FullName
+                    
+                    if ($JarAnalysis.Suspicious) {
+                        $ModInfo.Suspicious = $true
+                        $ModInfo.Reasons += $JarAnalysis.Reasons
+                        $ModInfo.Status = "Suspicious Content"
+                    }
                 }
-            }
 
-            # Analyze text files (JSON, configs)
-            if ($Mod.Extension -match '\.(json|txt|cfg|config)$') {
-                $TextAnalysis = Analyze-TextFile -FilePath $Mod.FullName
-                if ($TextAnalysis.Suspicious) {
-                    $ModInfo.Suspicious = $true
-                    $ModInfo.Reasons += $TextAnalysis.Reasons
-                }
-            }
-
-            # Check file size (suspicious if too small/large)
-            if ($Mod.Extension -eq '.jar') {
-                if ($Mod.Length -lt 1024) { # Less than 1KB
-                    $ModInfo.Suspicious = $true
-                    $ModInfo.Reasons += "Suspiciously small JAR file ($([math]::Round($Mod.Length/1KB, 2)) KB)"
-                } elseif ($Mod.Length -gt 50MB) { # More than 50MB
-                    $ModInfo.Suspicious = $true
-                    $ModInfo.Reasons += "Unusually large JAR file ($([math]::Round($Mod.Length/1MB, 2)) MB)"
+                # Check if it's an unknown mod (not verified, not suspicious)
+                if (-not $ModInfo.Suspicious) {
+                    $ModInfo.Status = "Unknown Mod"
+                    $UnknownMods++
+                    Write-Host "    ❓ Unknown mod (check on Modrinth)" -ForegroundColor Yellow
                 }
             }
         }
@@ -159,27 +165,44 @@ function Start-CheatScan {
     Write-Host "="*60 -ForegroundColor Cyan
     
     Write-Host "Total files scanned: $TotalMods" -ForegroundColor White
-    
+    Write-Host "✅ Verified mods: $VerifiedModsFound" -ForegroundColor Green
+    Write-Host "❓ Unknown mods: $UnknownMods" -ForegroundColor Yellow
+    Write-Host "🚨 Suspicious mods: $SuspiciousMods" -ForegroundColor Red
+
+    # Show verified mods
+    if ($VerifiedModsFound -gt 0) {
+        Write-Host "`n✅ VERIFIED MODS (Safe):" -ForegroundColor Green
+        foreach ($Mod in $ModList) {
+            if ($Mod.Verified) {
+                Write-Host "  - $($Mod.Name)" -ForegroundColor Green
+            }
+        }
+    }
+
     # Show suspicious mods
     if ($SuspiciousMods -gt 0) {
-        Write-Host "`n🚨 SUSPICIOUS FILES FOUND ($SuspiciousMods):" -ForegroundColor Red
+        Write-Host "`n🚨 SUSPICIOUS MODS:" -ForegroundColor Red
         
         foreach ($Mod in $ModList) {
             if ($Mod.Suspicious) {
-                Write-Host "`n❌ FILE: $($Mod.Name)" -ForegroundColor Red
+                Write-Host "`n❌ $($Mod.Name)" -ForegroundColor Red
+                Write-Host "   Status: $($Mod.Status)" -ForegroundColor Yellow
                 foreach ($Reason in $Mod.Reasons) {
                     Write-Host "   ⚠ $Reason" -ForegroundColor Yellow
                 }
             }
         }
-    } else {
-        Write-Host "`n✅ No suspicious files found" -ForegroundColor Green
     }
-    
-    # Show clean mods count
-    $CleanMods = $TotalMods - $SuspiciousMods
-    if ($CleanMods -gt 0) {
-        Write-Host "`n✅ Clean files: $CleanMods" -ForegroundColor Green
+
+    # Show unknown mods
+    if ($UnknownMods -gt 0) {
+        Write-Host "`n❓ UNKNOWN MODS (Check on Modrinth):" -ForegroundColor Yellow
+        foreach ($Mod in $ModList) {
+            if ($Mod.Status -eq "Unknown Mod") {
+                Write-Host "  - $($Mod.Name)" -ForegroundColor Yellow
+            }
+        }
+        Write-Host "`n💡 Tip: Search these mod names on https://modrinth.com to verify if they are safe." -ForegroundColor Cyan
     }
 
     # Scan running processes
@@ -208,28 +231,6 @@ function Start-CheatScan {
         Write-Host "✅ No suspicious programs found" -ForegroundColor Green
     }
 
-    # Check Recycle Bin
-    Write-Host "`n🗑️  Checking Recycle Bin..." -ForegroundColor Green
-    try {
-        $Shell = New-Object -ComObject Shell.Application
-        $RecycleBin = $Shell.NameSpace(0xA)
-        $DeletedJars = 0
-        
-        foreach ($Item in $RecycleBin.Items()) {
-            if ($Item.Name -match '\.jar$') {
-                $DeletedJars++
-            }
-        }
-        
-        if ($DeletedJars -gt 0) {
-            Write-Host "ℹ️  Found $DeletedJars JAR files in Recycle Bin" -ForegroundColor Yellow
-        } else {
-            Write-Host "✅ No JAR files in Recycle Bin" -ForegroundColor Green
-        }
-    } catch {
-        Write-Host "ℹ️  Could not check Recycle Bin" -ForegroundColor Gray
-    }
-
     # Final summary
     Write-Host "`n" + "="*60 -ForegroundColor Cyan
     Write-Host "FINAL RESULT" -ForegroundColor Cyan
@@ -241,8 +242,14 @@ function Start-CheatScan {
         Write-Host "Suspicious processes: $($RealSuspiciousProcesses.Count)" -ForegroundColor Red
         Write-Host "`nRecommendation: Remove suspicious files and restart computer." -ForegroundColor Yellow
     } else {
-        Write-Host "✅ YOUR SYSTEM IS CLEAN!" -ForegroundColor Green
-        Write-Host "No cheat activity detected." -ForegroundColor Green
+        if ($UnknownMods -gt 0) {
+            Write-Host "⚠️  CAUTION: Unknown mods found" -ForegroundColor Yellow
+            Write-Host "Your system appears clean, but some mods need verification." -ForegroundColor Yellow
+            Write-Host "Check unknown mods on https://modrinth.com" -ForegroundColor Cyan
+        } else {
+            Write-Host "✅ YOUR SYSTEM IS CLEAN!" -ForegroundColor Green
+            Write-Host "All mods are verified and safe." -ForegroundColor Green
+        }
     }
 
     Write-Host "`nPress any key to exit..." -ForegroundColor Gray
@@ -293,41 +300,6 @@ function Analyze-JarFile {
         $ZipFile.Dispose()
     } catch {
         $Result.Reasons += "Could not analyze JAR contents"
-    }
-    
-    return $Result
-}
-
-# Function to analyze text files
-function Analyze-TextFile {
-    param($FilePath)
-    
-    $Result = @{
-        Suspicious = $false
-        Reasons = @()
-    }
-    
-    try {
-        if ((Get-Item $FilePath).Length -lt 100000) { # Only read files under 100KB
-            $Content = Get-Content $FilePath -Raw -ErrorAction SilentlyContinue
-            
-            if ($Content) {
-                $ContentLower = $Content.ToLower()
-                
-                # Check for cheat patterns in content
-                foreach ($Pattern in $CheatPatterns) {
-                    if ($ContentLower -match $Pattern) {
-                        # Skip common false positives
-                        if (-not ($FilePath -match 'tt_ru\.json' -and $Pattern -eq 'hidden')) {
-                            $Result.Suspicious = $true
-                            $Result.Reasons += "File contains cheat pattern: $Pattern"
-                        }
-                    }
-                }
-            }
-        }
-    } catch {
-        # Skip files that can't be read
     }
     
     return $Result
