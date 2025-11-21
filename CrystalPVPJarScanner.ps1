@@ -4,6 +4,30 @@
 Write-Host "=== Crystal PVP Cheat Scanner with .jar Analysis ===" -ForegroundColor Cyan
 Write-Host "Scan started: $(Get-Date)" -ForegroundColor Yellow
 
+# Ask user for Minecraft path
+Write-Host "`nPlease enter your Minecraft .minecraft folder path:" -ForegroundColor White
+Write-Host "Examples:" -ForegroundColor Gray
+Write-Host "  - Default: C:\Users\YourName\AppData\Roaming\.minecraft" -ForegroundColor Gray
+Write-Host "  - MultiMC: C:\Users\YourName\Desktop\MultiMC\instances\YourInstance\.minecraft" -ForegroundColor Gray
+Write-Host "  - Lunar Client: C:\Users\YourName\.lunarclient\offline\1.8\.minecraft" -ForegroundColor Gray
+Write-Host "  - Badlion Client: C:\Users\YourName\AppData\Roaming\.badlionclient\.minecraft" -ForegroundColor Gray
+
+$MinecraftPath = Read-Host "`nEnter Minecraft path"
+
+# Validate path
+if (-not (Test-Path $MinecraftPath)) {
+    Write-Host "ERROR: Path does not exist: $MinecraftPath" -ForegroundColor Red
+    Write-Host "Please check the path and try again." -ForegroundColor Yellow
+    exit
+}
+
+if (-not (Test-Path "$MinecraftPath\mods")) {
+    Write-Host "WARNING: No 'mods' folder found in the specified path." -ForegroundColor Yellow
+    Write-Host "The scanner will continue but may not find all mods." -ForegroundColor Yellow
+}
+
+Write-Host "`nUsing Minecraft path: $MinecraftPath" -ForegroundColor Green
+
 $ScanResults = [System.Collections.ArrayList]@()
 $CheatDetected = $false
 $DeletedJarsFound = $false
@@ -32,17 +56,13 @@ $SuspiciousKeywords = @(
     "undetectable", "hidden", "ghost", "phantom", "spoofer"
 )
 
-# Minecraft directories to scan
+# Minecraft directories to scan (based on user input)
 $MinecraftPaths = @(
-    "$env:APPDATA\.minecraft\mods",
-    "$env:APPDATA\.minecraft\versions", 
-    "$env:APPDATA\.minecraft\client",
-    "$env:APPDATA\.minecraft\libraries",
-    "$env:APPDATA\.minecraft\shaderpacks",
-    "$env:USERPROFILE\AppData\Roaming\.minecraft\mods",
-    "$env:USERPROFILE\Documents\Minecraft",
-    "$env:USERPROFILE\Downloads",
-    "$env:USERPROFILE\Desktop"
+    "$MinecraftPath\mods",
+    "$MinecraftPath\versions", 
+    "$MinecraftPath\client",
+    "$MinecraftPath\libraries",
+    "$MinecraftPath\shaderpacks"
 )
 
 # Function to check for recently deleted .jar files
@@ -94,31 +114,6 @@ function Search-DeletedJarFiles {
         Write-Host "Event log access limited: $($_.Exception.Message)" -ForegroundColor Yellow
     }
     
-    # Check recent file history
-    Write-Host "Checking recent files..." -ForegroundColor Yellow
-    $RecentPaths = @(
-        "$env:USERPROFILE\Recent",
-        "$env:APPDATA\Microsoft\Windows\Recent"
-    )
-    
-    foreach ($RecentPath in $RecentPaths) {
-        if (Test-Path $RecentPath) {
-            try {
-                $RecentFiles = Get-ChildItem $RecentPath -ErrorAction SilentlyContinue | Where-Object {
-                    $_.Name -match '\.jar' -and $_.LastWriteTime -gt $OneHourAgo
-                }
-                
-                foreach ($File in $RecentFiles) {
-                    $Result = "RECENT_JAR_ACCESS: $($File.Name) was accessed at $($File.LastWriteTime)"
-                    [void]$DeletedJars.Add($Result)
-                    Write-Host "! Recent jar access: $($File.Name)" -ForegroundColor Yellow
-                }
-            } catch {
-                # Skip inaccessible paths
-            }
-        }
-    }
-    
     return $DeletedJars
 }
 
@@ -149,7 +144,7 @@ foreach ($Path in $MinecraftPaths) {
                 
                 # Check file content for suspicious strings
                 try {
-                    if ($Item.Length -lt 5MB) { # Avoid large files
+                    if ($Item.Length -lt 5MB -and $_.Extension -eq '.txt') { # Only read small text files
                         $Content = Get-Content $FullPath -Raw -ErrorAction SilentlyContinue
                         if ($Content) {
                             foreach ($Keyword in $SuspiciousKeywords) {
@@ -170,6 +165,8 @@ foreach ($Path in $MinecraftPaths) {
         } catch {
             Write-Host "Error scanning path: $($_.Exception.Message)" -ForegroundColor Yellow
         }
+    } else {
+        Write-Host "Path not found: $Path" -ForegroundColor Gray
     }
 }
 
@@ -195,11 +192,15 @@ if ($DeletedJarsFound) {
 
 # Generate comprehensive report
 Write-Host "`n" + "="*70 -ForegroundColor Cyan
+Write-Host "SCAN COMPLETE" -ForegroundColor Cyan
+Write-Host "Minecraft Path: $MinecraftPath" -ForegroundColor Gray
+
 if ($CheatDetected -or $DeletedJarsFound) {
-    Write-Host "!!! SECURITY ALERT - SUSPICIOUS ACTIVITY DETECTED !!!" -ForegroundColor Red -BackgroundColor White
+    Write-Host "!!! SUSPICIOUS ACTIVITY DETECTED !!!" -ForegroundColor Red -BackgroundColor White
     
     if ($CheatDetected) {
-        Write-Host "Active Cheats Found: $($ScanResults.Where({$_ -match 'SUSPICIOUS'}).Count)" -ForegroundColor Red
+        $CheatCount = ($ScanResults | Where-Object { $_ -match 'SUSPICIOUS' }).Count
+        Write-Host "Active Cheats Found: $CheatCount" -ForegroundColor Red
     }
     
     if ($DeletedJarsFound) {
@@ -213,6 +214,7 @@ if ($CheatDetected -or $DeletedJarsFound) {
     $ReportHeader = @"
 Crystal PVP Cheat Scan with .jar Analysis
 Generated: $(Get-Date)
+Minecraft Path: $MinecraftPath
 Scan Results: $($ScanResults.Count) detections
 
 ACTIVE CHEAT DETECTIONS:
@@ -226,28 +228,11 @@ ACTIVE CHEAT DETECTIONS:
         $DeletedJarResults | Out-File $ReportFile -Append
     }
     
-    Write-Host "Detailed report saved: $ReportFile" -ForegroundColor Yellow
+    Write-Host "`nDetailed report saved: $ReportFile" -ForegroundColor Yellow
     
-    # Return results for Discord bot
-    return @{
-        CheatsFound = $CheatDetected
-        DeletedJarsFound = $DeletedJarsFound
-        Results = $ScanResults
-        DeletedJarResults = $DeletedJarResults
-        Timestamp = $Timestamp
-        FilePath = $ReportFile
-        DetectionCount = $ScanResults.Count
-        DeletedCount = $DeletedJarResults.Count
-    }
 } else {
     Write-Host "✓ No Crystal PVP cheats or suspicious .jar activity detected" -ForegroundColor Green
-    return @{
-        CheatsFound = $false
-        DeletedJarsFound = $false
-        Results = @()
-        DeletedJarResults = @()
-        Timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
-        DetectionCount = 0
-        DeletedCount = 0
-    }
 }
+
+Write-Host "`nPress any key to exit..." -ForegroundColor Gray
+$null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
