@@ -1,5 +1,7 @@
-# Minecraft Cheat Scanner - Real Hack Code Detection
-# Only shows mods that contain actual cheat code
+# Minecraft Cheat Scanner - Sends Mod Files to Discord Webhook
+
+# Discord Webhook URL - INSERT YOUR WEBHOOK HERE
+$DiscordWebhookURL = "https://discord.com/api/webhooks/1441582717627142287/RAVzJaZiHjUDTG4CT96WZdr7NQD84U2e3mS8AHH4yEQ3EqicJKLxiu1o58_eyBWsWI6S"
 
 function Start-CheatScan {
     Write-Host "=== Minecraft Cheat Scanner ===" -ForegroundColor Cyan
@@ -23,35 +25,19 @@ function Start-CheatScan {
 
     Write-Host "`n✅ Scanning: $MinecraftPath" -ForegroundColor Green
 
-    # Real cheat code patterns - not just filenames
-    $CheatCodePatterns = @(
-        # PVP cheat functions
-        "killaura", "kill.*aura", "aura.*kill",
-        "reach", "attack.*reach", "hit.*reach", 
-        "velocity", "knockback", "antiknockback",
-        "autoclick", "auto.*click", "clicker",
-        "aimassist", "aim.*assist", "aimbot",
-        "triggerbot", "trigger.*bot",
-        "antibot", "anti.*bot",
-        "speedmine", "fast.*mine",
-        "nuker", "block.*nuker",
-        "scaffold", "tower", "bridge",
-        "nofall", "no.*fall",
-        "flight", "fly", "jesus",
-        "speed", "bunny.*hop",
-        "xray", "ore.*esp",
-        "esp", "tracers", "radar",
-        "nametags", "name.*tags",
-        "hitboxes", "hit.*boxes",
-        "crystalaura", "crystal.*aura",
-        "autopot", "auto.*pot",
-        "fastplace", "fast.*place"
+    # Known cheat mods
+    $KnownCheatMods = @(
+        "osmium", "elytraboost", "cwe", "crystaloptimizer",
+        "heroanchor", "anchoroptimizer", "ias", "interactivespeed",
+        "cookeymod", "reflex", "vulcan", "verus", "cwb"
     )
 
-    # Known safe system programs
-    $SafePrograms = @(
-        "nvsphelper", "discord", "obs", "overwolf",
-        "teamspeak", "mumble", "nvidia", "amd", "intel"
+    # Cheat code patterns
+    $CheatCodePatterns = @(
+        "killaura", "reach", "velocity", "autoclick", "aimassist",
+        "triggerbot", "antibot", "speedmine", "nuker", "scaffold",
+        "nofall", "flight", "xray", "esp", "crystalaura", "autopot",
+        "elytra.*boost", "anchor.*optimizer", "interactive.*speed"
     )
 
     # Scan mods folder
@@ -64,11 +50,14 @@ function Start-CheatScan {
         exit
     }
 
-    Write-Host "`n🔍 Opening and scanning JAR files for cheat code..." -ForegroundColor Green
+    Write-Host "`n🔍 Scanning for cheat mods..." -ForegroundColor Green
     
     $TotalMods = 0
-    $ModsWithCheats = 0
+    $CheatModsFound = 0
     $CheatModsList = @()
+    $ScanTime = Get-Date
+    $ComputerName = $env:COMPUTERNAME
+    $UserName = $env:USERNAME
 
     # Search all JAR files in mods folder
     $ModFiles = Get-ChildItem $ModsPath -Filter "*.jar" -ErrorAction SilentlyContinue
@@ -76,72 +65,308 @@ function Start-CheatScan {
     foreach ($Mod in $ModFiles) {
         $TotalMods++
         $ModName = $Mod.Name
+        $ModNameLower = $Mod.Name.ToLower()
         
         Write-Host "  Scanning: $ModName" -ForegroundColor Gray
         
-        # Deep scan JAR for actual cheat code
-        $CheatAnalysis = Find-CheatCodeInJar -FilePath $Mod.FullName -ModName $ModName
+        # Check if it's a known cheat mod
+        $IsKnownCheat = $false
+        $DetectedCheatType = ""
+        foreach ($CheatMod in $KnownCheatMods) {
+            if ($ModNameLower -match $CheatMod) {
+                $IsKnownCheat = $true
+                $DetectedCheatType = $CheatMod
+                break
+            }
+        }
+
+        $CheatAnalysis = @{
+            ContainsCheats = $false
+            CheatEvidence = @()
+            CheatType = ""
+            FilePath = $Mod.FullName
+            FileSize = "$([math]::Round($Mod.Length/1KB, 2)) KB"
+        }
+
+        if ($IsKnownCheat) {
+            $CheatAnalysis.ContainsCheats = $true
+            $CheatAnalysis.CheatType = $DetectedCheatType
+            $CheatAnalysis.CheatEvidence += "Known cheat mod: $DetectedCheatType"
+        } else {
+            # Deep scan for cheat code
+            $DeepAnalysis = Find-CheatCodeInJar -FilePath $Mod.FullName -ModName $ModName
+            if ($DeepAnalysis.ContainsCheats) {
+                $CheatAnalysis.ContainsCheats = $true
+                $CheatAnalysis.CheatEvidence = $DeepAnalysis.CheatEvidence
+                $CheatAnalysis.CheatType = "Custom Cheat"
+            }
+        }
         
         if ($CheatAnalysis.ContainsCheats) {
-            $ModsWithCheats++
+            $CheatModsFound++
             $CheatModsList += @{
                 Name = $ModName
-                CheatFiles = $CheatAnalysis.CheatFiles
+                FilePath = $Mod.FullName
+                FileSize = $CheatAnalysis.FileSize
                 CheatEvidence = $CheatAnalysis.CheatEvidence
+                CheatType = $CheatAnalysis.CheatType
             }
             
-            Write-Host "    🚨 CHEAT CODE FOUND!" -ForegroundColor Red
-            foreach ($evidence in $CheatAnalysis.CheatEvidence) {
-                Write-Host "      ⚠ $evidence" -ForegroundColor Yellow
-            }
+            Write-Host "    🚨 CHEAT DETECTED: $($CheatAnalysis.CheatType)" -ForegroundColor Red
+            
+            # Send this cheat mod to Discord immediately
+            Send-CheatToDiscord -ModInfo $CheatModsList[-1] -ComputerName $ComputerName -UserName $UserName
         } else {
-            Write-Host "    ✅ No cheat code found" -ForegroundColor Green
+            Write-Host "    ✅ Clean" -ForegroundColor Green
         }
     }
 
-    # Display ONLY cheat results
+    # Display results
     Write-Host "`n" + "="*70 -ForegroundColor Cyan
-    Write-Host "CHEAT SCAN RESULTS" -ForegroundColor Cyan
+    Write-Host "CHEAT DETECTION RESULTS" -ForegroundColor Cyan
     Write-Host "="*70 -ForegroundColor Cyan
     
     Write-Host "JAR files scanned: $TotalMods" -ForegroundColor White
     
-    if ($ModsWithCheats -gt 0) {
-        Write-Host "🚨 MODS WITH CHEAT CODE: $ModsWithCheats" -ForegroundColor Red
+    if ($CheatModsFound -gt 0) {
+        Write-Host "🚨 CHEAT MODS FOUND: $CheatModsFound" -ForegroundColor Red
         Write-Host "-" * 50 -ForegroundColor Red
         
         foreach ($CheatMod in $CheatModsList) {
-            Write-Host "`n❌ $($CheatMod.Name)" -ForegroundColor Red
-            Write-Host "   Cheat evidence:" -ForegroundColor Yellow
+            Write-Host "`n❌ $($CheatMod.Name) ($($CheatMod.FileSize))" -ForegroundColor Red
+            Write-Host "   Type: $($CheatMod.CheatType)" -ForegroundColor Yellow
             foreach ($evidence in $CheatMod.CheatEvidence) {
                 Write-Host "   ⚠ $evidence" -ForegroundColor Yellow
             }
-            if ($CheatMod.CheatFiles.Count -gt 0) {
-                Write-Host "   Files with cheat code:" -ForegroundColor Red
-                foreach ($file in $CheatMod.CheatFiles) {
-                    Write-Host "      - $file" -ForegroundColor Yellow
-                }
-            }
         }
-    } else {
-        Write-Host "`n✅ NO CHEAT CODE FOUND IN ANY MODS!" -ForegroundColor Green
-        Write-Host "All mods appear to be clean." -ForegroundColor Green
-    }
 
-    # Final summary
-    Write-Host "`n" + "="*70 -ForegroundColor Cyan
-    
-    if ($ModsWithCheats -gt 0) {
-        Write-Host "🚨 REMOVE THESE $ModsWithCheats MODS - THEY CONTAIN CHEAT CODE!" -ForegroundColor Red
+        # Send final summary to Discord
+        Send-SummaryToDiscord -CheatModsList $CheatModsList -TotalMods $TotalMods -ComputerName $ComputerName -UserName $UserName
+
+        Write-Host "`n" + "!"*50 -ForegroundColor Red
+        Write-Host "CHEAT MODS SENT TO DISCORD!" -ForegroundColor Red
+        Write-Host "!"*50 -ForegroundColor Red
     } else {
-        Write-Host "✅ YOUR MODS ARE CLEAN - NO CHEATS DETECTED" -ForegroundColor Green
+        Write-Host "`n✅ NO CHEAT MODS DETECTED!" -ForegroundColor Green
+        Write-Host "Your mod folder is clean." -ForegroundColor Green
+        
+        # Send clean report to Discord
+        Send-CleanReportToDiscord -TotalMods $TotalMods -ComputerName $ComputerName -UserName $UserName
     }
 
     Write-Host "`nPress any key to exit..." -ForegroundColor Gray
     $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
 }
 
-# Function to find actual cheat code in JAR files
+# Function to send individual cheat mod to Discord with file attachment
+function Send-CheatToDiscord {
+    param(
+        [hashtable]$ModInfo,
+        [string]$ComputerName,
+        [string]$UserName
+    )
+    
+    try {
+        # Create multipart form data
+        $Boundary = [System.Guid]::NewGuid().ToString()
+        $ContentType = "multipart/form-data; boundary=$Boundary"
+        
+        # Create the body
+        $Body = @"
+--$Boundary
+Content-Disposition: form-data; name="payload_json"
+Content-Type: application/json
+
+{
+    "embeds": [
+        {
+            "title": "🚨 CHEAT MOD DETECTED",
+            "color": 16711680,
+            "fields": [
+                {
+                    "name": "Mod File",
+                    "value": "```$($ModInfo.Name)```",
+                    "inline": true
+                },
+                {
+                    "name": "Cheat Type",
+                    "value": "```$($ModInfo.CheatType)```",
+                    "inline": true
+                },
+                {
+                    "name": "File Size",
+                    "value": "```$($ModInfo.FileSize)```",
+                    "inline": true
+                },
+                {
+                    "name": "Computer",
+                    "value": "```$ComputerName```",
+                    "inline": true
+                },
+                {
+                    "name": "User",
+                    "value": "```$UserName```",
+                    "inline": true
+                },
+                {
+                    "name": "Evidence",
+                    "value": "$(($ModInfo.CheatEvidence -join '\n') -replace '"', '\"')"
+                }
+            ],
+            "timestamp": "$(Get-Date -Format "yyyy-MM-ddTHH:mm:ss.fffZ")",
+            "footer": {
+                "text": "Minecraft Cheat Scanner"
+            }
+        }
+    ]
+}
+--$Boundary
+Content-Disposition: form-data; name="file"; filename="$($ModInfo.Name)"
+Content-Type: application/java-archive
+
+"@
+
+        # Read the file bytes
+        $FileBytes = [System.IO.File]::ReadAllBytes($ModInfo.FilePath)
+        $Encoding = [System.Text.Encoding]::GetEncoding("iso-8859-1")
+        
+        # Convert body to bytes
+        $BodyBytes = $Encoding.GetBytes($Body)
+        
+        # Combine body + file + footer
+        $FinalBytes = $BodyBytes + $FileBytes + $Encoding.GetBytes("`r`n--$Boundary--`r`n")
+        
+        # Send to Discord
+        $Response = Invoke-RestMethod -Uri $DiscordWebhookURL -Method Post -ContentType $ContentType -Body $FinalBytes
+        
+        Write-Host "    📤 Sent to Discord: $($ModInfo.Name)" -ForegroundColor Green
+        
+    } catch {
+        Write-Host "    ❌ Failed to send to Discord: $($_.Exception.Message)" -ForegroundColor Red
+    }
+}
+
+# Function to send final summary to Discord
+function Send-SummaryToDiscord {
+    param(
+        [array]$CheatModsList,
+        [int]$TotalMods,
+        [string]$ComputerName,
+        [string]$UserName
+    )
+    
+    try {
+        $CheatModsText = $CheatModsList | ForEach-Object { 
+            "• $($_.Name) - $($_.CheatType) ($($_.FileSize))"
+        }
+        
+        $SummaryJSON = @{
+            embeds = @(
+                @{
+                    title = "📊 SCAN SUMMARY - CHEATS FOUND"
+                    color = 16711680
+                    fields = @(
+                        @{
+                            name = "Computer"
+                            value = "```$ComputerName```"
+                            inline = $true
+                        },
+                        @{
+                            name = "User"
+                            value = "```$UserName```"
+                            inline = $true
+                        },
+                        @{
+                            name = "Scan Time"
+                            value = "```$(Get-Date)```"
+                            inline = $true
+                        },
+                        @{
+                            name = "Files Scanned"
+                            value = "```$TotalMods```"
+                            inline = $true
+                        },
+                        @{
+                            name = "Cheats Found"
+                            value = "```$($CheatModsList.Count)```"
+                            inline = $true
+                        },
+                        @{
+                            name = "Detected Cheats"
+                            value = ($CheatModsText -join "`n")
+                        }
+                    )
+                    timestamp = (Get-Date -Format "yyyy-MM-ddTHH:mm:ss.fffZ")
+                    footer = @{
+                        text = "Minecraft Cheat Scanner - $($CheatModsList.Count) files uploaded"
+                    }
+                }
+            )
+        } | ConvertTo-Json -Depth 10
+        
+        Invoke-RestMethod -Uri $DiscordWebhookURL -Method Post -Body $SummaryJSON -ContentType "application/json"
+        
+    } catch {
+        Write-Host "    ❌ Failed to send summary to Discord" -ForegroundColor Red
+    }
+}
+
+# Function to send clean report
+function Send-CleanReportToDiscord {
+    param(
+        [int]$TotalMods,
+        [string]$ComputerName,
+        [string]$UserName
+    )
+    
+    try {
+        $CleanJSON = @{
+            embeds = @(
+                @{
+                    title = "✅ SCAN SUMMARY - CLEAN SYSTEM"
+                    color = 65280
+                    fields = @(
+                        @{
+                            name = "Computer"
+                            value = "```$ComputerName```"
+                            inline = $true
+                        },
+                        @{
+                            name = "User"
+                            value = "```$UserName```"
+                            inline = $true
+                        },
+                        @{
+                            name = "Files Scanned"
+                            value = "```$TotalMods```"
+                            inline = $true
+                        },
+                        @{
+                            name = "Cheats Found"
+                            value = "```0```"
+                            inline = $true
+                        },
+                        @{
+                            name = "Status"
+                            value = "✅ All mods are clean"
+                        }
+                    )
+                    timestamp = (Get-Date -Format "yyyy-MM-ddTHH:mm:ss.fffZ")
+                    footer = @{
+                        text = "Minecraft Cheat Scanner"
+                    }
+                }
+            )
+        } | ConvertTo-Json -Depth 10
+        
+        Invoke-RestMethod -Uri $DiscordWebhookURL -Method Post -Body $CleanJSON -ContentType "application/json"
+        
+    } catch {
+        Write-Host "    ❌ Failed to send clean report to Discord" -ForegroundColor Red
+    }
+}
+
+# Function to find cheat code in JAR files
 function Find-CheatCodeInJar {
     param(
         [string]$FilePath,
@@ -150,121 +375,32 @@ function Find-CheatCodeInJar {
     
     $Result = @{
         ContainsCheats = $false
-        CheatFiles = @()
         CheatEvidence = @()
-        FilesScanned = 0
     }
     
     try {
         Add-Type -AssemblyName System.IO.Compression.FileSystem
         $ZipFile = [System.IO.Compression.ZipFile]::OpenRead($FilePath)
         
-        # Check each file in the JAR for cheat code
         foreach ($Entry in $ZipFile.Entries) {
-            $Result.FilesScanned++
             $EntryName = $Entry.Name
             $EntryNameLower = $Entry.Name.ToLower()
             
-            # Skip very small files and binary files
-            if ($Entry.Length -lt 10) { continue }
-            if ($EntryName -match '\.class$|\.png$|\.jpg$|\.ogg$|\.wav$') { continue }
-            
-            # Check for cheat-related file names
-            $CheatFileFound = $false
-            $CheatType = ""
-            
+            # Check file names for cheat patterns
             foreach ($Pattern in $CheatCodePatterns) {
                 if ($EntryNameLower -match $Pattern) {
-                    $CheatFileFound = $true
-                    $CheatType = "File contains cheat reference: $Pattern"
+                    $Result.ContainsCheats = $true
+                    $Result.CheatEvidence += "Contains cheat file: $Pattern ($EntryName)"
                     break
                 }
-            }
-            
-            # Read and analyze text-based files for actual cheat code
-            if ($EntryName -match '\.(java|json|txt|yml|yaml|properties|cfg|config|mcmeta|toml)$') {
-                if ($Entry.Length -lt 50000) { # Only read files under 50KB
-                    try {
-                        $Stream = $Entry.Open()
-                        $Reader = New-Object System.IO.StreamReader($Stream)
-                        $Content = $Reader.ReadToEnd()
-                        $Reader.Close()
-                        $Stream.Close()
-                        
-                        $ContentLower = $Content.ToLower()
-                        
-                        # Look for actual cheat code implementation
-                        if ($ContentLower -match 'killaura|entityaura|attackallentities') {
-                            $CheatFileFound = $true
-                            $CheatType = "Contains KillAura code"
-                        }
-                        elseif ($ContentLower -match 'reach.*[=:].*[3-9]\.?[0-9]*|attackrange.*[=:].*[3-9]') {
-                            $CheatFileFound = $true
-                            $CheatType = "Contains Reach hack (extended attack range)"
-                        }
-                        elseif ($ContentLower -match 'velocity.*[=:].*[01]\.?[0-9]*|knockback.*[=:].*0\.?[0-9]*') {
-                            $CheatFileFound = $true
-                            $CheatType = "Contains Velocity/Knockback modifier"
-                        }
-                        elseif ($ContentLower -match 'autoclick|autoclicker|clickspam') {
-                            $CheatFileFound = $true
-                            $CheatType = "Contains AutoClicker code"
-                        }
-                        elseif ($ContentLower -match 'aimassist|aimbot|lockontarget') {
-                            $CheatFileFound = $true
-                            $CheatType = "Contains AimAssist/Aimbot code"
-                        }
-                        elseif ($ContentLower -match 'antibot|checkbot|botdetection') {
-                            $CheatFileFound = $true
-                            $CheatType = "Contains AntiBot system (common in cheats)"
-                        }
-                        elseif ($ContentLower -match 'nuker|fastbreak|instantbreak') {
-                            $CheatFileFound = $true
-                            $CheatType = "Contains Nuker/FastBreak code"
-                        }
-                        elseif ($ContentLower -match 'scaffold|tower|bridge') {
-                            $CheatFileFound = $true
-                            $CheatType = "Contains Scaffold code"
-                        }
-                        elseif ($ContentLower -match 'nofall|nofall|fall.*damage') {
-                            $CheatFileFound = $true
-                            $CheatType = "Contains NoFall code"
-                        }
-                        elseif ($ContentLower -match 'crystalaura|ca\.|crystal.*place') {
-                            $CheatFileFound = $true
-                            $CheatType = "Contains CrystalAura code"
-                        }
-                        elseif ($ContentLower -match 'xray|oreesp|seeores') {
-                            $CheatFileFound = $true
-                            $CheatType = "Contains Xray/OREesp code"
-                        }
-                        elseif ($ContentLower -match 'esp|tracers|entityoverlay') {
-                            $CheatFileFound = $true
-                            $CheatType = "Contains ESP/Tracers code"
-                        }
-                    } catch {
-                        # Skip files that can't be read
-                    }
-                }
-            }
-            
-            if ($CheatFileFound) {
-                $Result.ContainsCheats = $true
-                $Result.CheatFiles += $EntryName
-                $Result.CheatEvidence += $CheatType
-            }
-            
-            # Limit scanning to prevent timeout
-            if ($Result.FilesScanned -gt 800) {
-                $Result.CheatEvidence += "Stopped after scanning 800 files"
-                break
             }
         }
         
         $ZipFile.Dispose()
         
     } catch {
-        $Result.CheatEvidence += "Could not scan JAR contents: $($_.Exception.Message)"
+        $Result.ContainsCheats = $true
+        $Result.CheatEvidence += "Could not scan JAR - possibly obfuscated cheat"
     }
     
     return $Result
