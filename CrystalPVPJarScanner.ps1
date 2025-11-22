@@ -2,62 +2,73 @@
 # Zero False-Positive Minecraft Mod Scanner
 # Detects only known cheat clients, ignores normal mods
 
-# Webhook (optional)
-$WebhookUrl = ""  # Insert your Discord webhook here if needed
+# Optional Discord Webhook
+$WebhookUrl = ""  # Insert your webhook here
 
+# -----------------------------
+# Helper: Normalize Path
+# -----------------------------
+function Normalize-Path {
+    param([string]$Path)
+    if ($Path) {
+        $Path = $Path.Trim('"')      # Remove quotes
+        $Path = $Path.Trim()         # Remove whitespace
+        try {
+            $Path = [System.IO.Path]::GetFullPath($Path)
+            if (Test-Path $Path) { return $Path }
+        } catch {}
+    }
+    return $null
+}
+
+# -----------------------------
+# Main Scanner
+# -----------------------------
 function Start-CheatScan {
     try {
         Write-Host "=== CrystalPVPJarScanner ===" -ForegroundColor Cyan
         Write-Host "Scan started: $(Get-Date)" -ForegroundColor Yellow
 
-        $ModsPath = $null
+        # 1) Detect running Minecraft process
+        $MinecraftPath = $null
         $runningMC = Get-Process java,javaw,wjava -ErrorAction SilentlyContinue
-
         foreach ($p in $runningMC) {
             try {
                 $cmd = (Get-CimInstance Win32_Process -Filter "ProcessId=$($p.Id)").CommandLine
-                # Modrinth profile
-                if ($cmd -match "ModrinthApp\\profiles\\") {
-                    $match = [regex]::Match($cmd, "(.*?\\profiles\\.*?)(\s|$)")
+                if ($cmd -match "\.minecraft") {
+                    $match = [regex]::Match($cmd, "(.*?\.minecraft)")
                     if ($match.Success) {
-                        $path = $match.Groups[1].Value.Trim('"')
-                        $ModsPath = Join-Path $path "mods"
-                        break
-                    }
-                }
-                # MultiMC instance
-                elseif ($cmd -match "MultiMC\\instances\\") {
-                    $match = [regex]::Match($cmd, "(.*?\\instances\\.*?)(\s|$)")
-                    if ($match.Success) {
-                        $path = $match.Groups[1].Value.Trim('"')
-                        $ModsPath = Join-Path $path "mods"
-                        break
-                    }
-                }
-                # Standard .minecraft
-                elseif ($cmd -match "\.minecraft") {
-                    $match = [regex]::Match($cmd, "(.*?\\.minecraft)")
-                    if ($match.Success) {
-                        $path = $match.Groups[1].Value.Trim('"')
-                        $ModsPath = Join-Path $path "mods"
-                        break
+                        $MinecraftPath = Normalize-Path $match.Groups[1].Value
+                        if ($MinecraftPath) { break }
                     }
                 }
             } catch {}
         }
 
-        # Fallback
-        if (-not $ModsPath -or -not (Test-Path $ModsPath)) {
-            $ModsPath = Join-Path $env:APPDATA ".minecraft\mods"
-            Write-Host "🟡 Minecraft not running or profile not detected — using default path: $ModsPath" -ForegroundColor Yellow
+        # 2) Fallback: ask user if not found
+        if (-not $MinecraftPath) {
+            Write-Host "🟡 Minecraft not running or profile not detected."
+            $InputPath = Read-Host "Enter your Minecraft/Modrinth/MultiMC folder path"
+            $MinecraftPath = Normalize-Path $InputPath
         }
 
-        if (-not (Test-Path $ModsPath)) {
-            throw "Mods folder not found: $ModsPath"
+        # 3) Final fallback: default .minecraft
+        if (-not $MinecraftPath) {
+            $MinecraftPath = Join-Path $env:APPDATA ".minecraft"
+            $MinecraftPath = Normalize-Path $MinecraftPath
+            Write-Host "🟡 Using default path: $MinecraftPath" -ForegroundColor Yellow
+        }
+
+        # 4) Mods folder
+        $ModsPath = Join-Path $MinecraftPath "mods"
+        $ModsPath = Normalize-Path $ModsPath
+        if (-not $ModsPath) {
+            throw "Mods folder not found in $MinecraftPath"
         }
 
         Write-Host "`n🔍 Scanning mods in: $ModsPath" -ForegroundColor Green
 
+        # 5) Scan each .jar
         $ModFiles = Get-ChildItem $ModsPath -Filter "*.jar" -ErrorAction Stop
         $CheatMods = @()
 
@@ -72,7 +83,9 @@ function Start-CheatScan {
             }
         }
 
+        # -------------------------
         # Results
+        # -------------------------
         Write-Host "`n===== SCAN RESULTS =====" -ForegroundColor Cyan
         Write-Host "Mods scanned: $($ModFiles.Count)" -ForegroundColor White
         Write-Host "Suspicious mods: $($CheatMods.Count)" -ForegroundColor Yellow
@@ -94,7 +107,9 @@ function Start-CheatScan {
     }
 }
 
+# -----------------------------
 # Analyze a single mod
+# -----------------------------
 function Analyze-Mod {
     param(
         [string]$JarPath,
@@ -113,7 +128,7 @@ function Analyze-Mod {
 
         $Files = Get-ChildItem $TempDir -Recurse -File
         foreach ($File in $Files) {
-            # Mod metadata JSON
+            # Check mod metadata JSON
             if ($File.Name -match "fabric\.mod\.json|mcmod\.info") {
                 try {
                     $Json = Get-Content $File.FullName -Raw | ConvertFrom-Json
@@ -123,7 +138,7 @@ function Analyze-Mod {
                 } catch {}
             }
 
-            # Package/folder names
+            # Check package/folder names
             $PathLower = $File.FullName.ToLower()
             foreach ($sig in $CheatSignatures) {
                 if ($PathLower -match $sig) {
@@ -151,7 +166,9 @@ function Analyze-Mod {
     }
 }
 
-# Known cheat client IDs or package names
+# -----------------------------
+# Known cheat clients
+# -----------------------------
 function Get-CheatSignatures {
     return @(
         "meteorclient",
@@ -169,7 +186,9 @@ function Get-CheatSignatures {
     )
 }
 
-# Discord webhook sender (optional)
+# -----------------------------
+# Discord webhook sender
+# -----------------------------
 function Send-Webhook {
     param([array]$CheatMods)
     if (-not $WebhookUrl) { return }
@@ -189,5 +208,7 @@ function Send-Webhook {
     }
 }
 
-# START SCAN
+# -----------------------------
+# Start the scan
+# -----------------------------
 Start-CheatScan
