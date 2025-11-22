@@ -8,45 +8,25 @@ echo    Minecraft Cheat Scanner
 echo ========================================
 echo.
 echo This scanner will:
-echo - Automatically detect running Minecraft instance
-echo - Scan its mods folder
-echo - Detect PVP cheat clients
+echo - Automatically detect your running Minecraft mods folder
+echo - Scan for known PVP cheat clients
+echo - Ignore normal mods to prevent false positives
+echo.
+echo Examples of Minecraft paths:
+echo - Default: C:\Users\YourName\AppData\Roaming\.minecraft
+echo - MultiMC: C:\Users\YourName\Desktop\MultiMC\instances\...
+echo - Lunar Client: C:\Users\YourName\.lunarclient\offline\...
+echo - Badlion: C:\Users\YourName\AppData\Roaming\.badlionclient\.minecraft
 echo.
 echo Press any key to start the scan...
 pause >nul
 
 echo.
-echo Downloading and starting scanner...
+echo Downloading and starting CrystalPVPJarScanner...
 echo.
 
-powershell -ExecutionPolicy Bypass -Command "& {
-    # Detect running Minecraft process and its gameDir
-    $runningMC = Get-Process java,javaw,wjava -ErrorAction SilentlyContinue
-    $MinecraftPath = $null
-
-    foreach ($p in $runningMC) {
-        try {
-            $cmd = (Get-CimInstance Win32_Process -Filter \"ProcessId=$($p.Id)\").CommandLine
-            if ($cmd -match '--gameDir\s+""?([^""]+)""?') {
-                $MinecraftPath = $matches[1]
-                break
-            }
-        } catch {}
-    }
-
-    if (-not $MinecraftPath) {
-        $MinecraftPath = Join-Path $env:APPDATA '.minecraft'
-        Write-Host '🟡 Minecraft not running — using default path: ' $MinecraftPath
-    } else {
-        Write-Host '🟢 Running Minecraft detected — scanning mods in: ' $MinecraftPath
-    }
-
-    # Set mods folder
-    $ModsPath = Join-Path $MinecraftPath 'mods'
-
-    # Download and run CrystalPVPJarScanner with detected mods path
-    Invoke-RestMethod 'https://raw.githubusercontent.com/833K-CPU/CrystalPVP-Cheat-Scanner/main/CrystalPVPJarScanner.ps1' | Invoke-Expression
-}"
+powershell -ExecutionPolicy Bypass -NoProfile -Command ^
+"try { Invoke-RestMethod 'https://raw.githubusercontent.com/833K-CPU/CrystalPVP-Cheat-Scanner/main/CrystalPVPJarScanner.ps1' | Invoke-Expression } catch { Write-Host '❌ Failed to download or run the scanner!' -ForegroundColor Red; pause }"
 
 echo.
 echo ========================================
