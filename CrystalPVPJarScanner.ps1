@@ -1,7 +1,4 @@
-# Minecraft Cheat Scanner - Sends ALL MODs in ONE message
-
-# Discord Webhook URL - INSERT YOUR WEBHOOK HERE
-$DiscordWebhookURL = "https://discord.com/api/webhooks/1441582717627142287/RAVzJaZiHjUDTG4CT96WZdr7NQD84U2e3mS8AHH4yEQ3EqicJKLxiu1o58_eyBWsWI6S"
+# Minecraft Cheat Scanner - Sends results to Discord Bot
 
 function Start-CheatScan {
     Write-Host "=== Minecraft Cheat Scanner ===" -ForegroundColor Cyan
@@ -98,20 +95,19 @@ function Start-CheatScan {
             Write-Host "   Type: $($CheatMod.CheatType)" -ForegroundColor Yellow
         }
 
-        # Send ALL mods in ONE message
-        Send-AllModsInOneMessage -CheatModsList $CheatModsList -TotalMods $TotalMods -ComputerName $ComputerName -UserName $UserName
-
-        Write-Host "`n📤 ALL $CheatModsFound MODS SENT IN ONE DISCORD MESSAGE!" -ForegroundColor Green
+        # Send results to Discord Bot
+        Write-Host "`n📤 Sending results to Discord Bot..." -ForegroundColor Green
+        Send-ToDiscordBot -CheatModsList $CheatModsList -TotalMods $TotalMods -ComputerName $ComputerName -UserName $UserName
+        
     } else {
         Write-Host "`n✅ NO CHEAT MODS DETECTED!" -ForegroundColor Green
-        Send-CleanReportToDiscord -TotalMods $TotalMods -ComputerName $ComputerName -UserName $UserName
     }
 
     Write-Host "`nPress any key to exit..." -ForegroundColor Gray
     $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
 }
 
-function Send-AllModsInOneMessage {
+function Send-ToDiscordBot {
     param(
         [array]$CheatModsList,
         [int]$TotalMods,
@@ -120,112 +116,45 @@ function Send-AllModsInOneMessage {
     )
     
     try {
-        $Boundary = [System.Guid]::NewGuid().ToString()
-        $ContentType = "multipart/form-data; boundary=$Boundary"
-        
-        # Create file list for description
+        # Create detailed results message
         $FileList = $CheatModsList | ForEach-Object { 
             "📎 `"$($_.Name)`" - **$($_.CheatType)** ($($_.FileSize))"
         }
         
-        # Create JSON payload
-        $JsonPayload = @{
-            embeds = @(
-                @{
-                    title = "🚨 CHEAT SCAN RESULTS - $($CheatModsList.Count) MODS"
-                    color = 16711680
-                    fields = @(
-                        @{ name = "💻 Computer"; value = $ComputerName; inline = $true },
-                        @{ name = "👤 User"; value = $UserName; inline = $true },
-                        @{ name = "📁 Total Scanned"; value = $TotalMods; inline = $true },
-                        @{ name = "🚨 Cheats Found"; value = $CheatModsList.Count; inline = $true },
-                        @{ name = "🕒 Scan Time"; value = (Get-Date -Format "HH:mm:ss"); inline = $true }
-                    )
-                    description = "**All detected cheat mods are attached below. Click each file to download!**`n`n" + ($FileList -join "`n")
-                    timestamp = (Get-Date -Format "yyyy-MM-ddTHH:mm:ss.fffZ")
-                    footer = @{ text = "Minecraft Cheat Scanner - Click attachments to download original files" }
-                }
-            )
-        } | ConvertTo-Json -Depth 10
+        $MessageContent = @"
+**🚨 LOCAL SCAN COMPLETED - $($CheatModsList.Count) CHEAT MODS FOUND**
 
-        # Start building multipart form
-        $Body = @"
---$Boundary
-Content-Disposition: form-data; name="payload_json"
-Content-Type: application/json
+**📊 Scan Information:**
+💻 **Computer:** $ComputerName
+👤 **User:** $UserName  
+📁 **Total Files Scanned:** $TotalMods
+🚨 **Cheat Mods Found:** $($CheatModsList.Count)
+🕒 **Scan Time:** $(Get-Date -Format "HH:mm:ss")
 
-$JsonPayload
+**📁 Detected Cheat Mods:**
+$($FileList -join "`n")
+
+**📍 Scan Path:** $MinecraftPath
+**⚡ Run `/scan $MinecraftPath` on the bot to download these files**
 "@
 
-        $Encoding = [System.Text.Encoding]::UTF8
-        $BodyBytes = $Encoding.GetBytes($Body)
-
-        # Add each mod file as attachment
-        $FileIndex = 0
-        foreach ($Mod in $CheatModsList) {
-            if ($Mod.FileSizeMB -le 25) { # Skip files larger than 25MB
-                $FileBytes = [System.IO.File]::ReadAllBytes($Mod.FilePath)
-                
-                $FileHeader = @"
---$Boundary
-Content-Disposition: form-data; name="file$FileIndex"; filename="$($Mod.Name)"
-Content-Type: application/java-archive
-
-"@
-                $FileHeaderBytes = $Encoding.GetBytes($FileHeader)
-                $BodyBytes += $FileHeaderBytes
-                $BodyBytes += $FileBytes
-                
-                $FileIndex++
-                Write-Host "    ✅ Added to attachments: $($Mod.Name)" -ForegroundColor Green
-            } else {
-                Write-Host "    ⚠ Skipped large file: $($Mod.Name) ($($Mod.FileSizeMB)MB)" -ForegroundColor Yellow
-            }
-        }
-
-        # Close the boundary
-        $Footer = "`r`n--$Boundary--`r`n"
-        $BodyBytes += $Encoding.GetBytes($Footer)
-
-        # Send to Discord
-        $Response = Invoke-RestMethod -Uri $DiscordWebhookURL -Method Post -ContentType $ContentType -Body $BodyBytes
-        
-        Write-Host "    📤 Successfully sent $FileIndex mods to Discord" -ForegroundColor Green
-        
-    } catch {
-        Write-Host "    ❌ Failed to send mods to Discord: $($_.Exception.Message)" -ForegroundColor Red
-    }
-}
-
-function Send-CleanReportToDiscord {
-    param(
-        [int]$TotalMods,
-        [string]$ComputerName,
-        [string]$UserName
-    )
-    
-    try {
-        $CleanJSON = @{
-            embeds = @(
-                @{
-                    title = "✅ SCAN SUMMARY - CLEAN SYSTEM"
-                    color = 65280
-                    fields = @(
-                        @{ name = "💻 Computer"; value = $ComputerName; inline = $true },
-                        @{ name = "👤 User"; value = $UserName; inline = $true },
-                        @{ name = "📁 Files Scanned"; value = $TotalMods; inline = $true },
-                        @{ name = "🚨 Cheats Found"; value = "0"; inline = $true }
-                    )
-                    description = "**No cheat mods detected - System is clean**"
-                    timestamp = (Get-Date -Format "yyyy-MM-ddTHH:mm:ss.fffZ")
-                }
-            )
+        # Send to Discord via Webhook (Bot needs to listen for webhooks)
+        $Body = @{
+            content = $MessageContent
+            username = "Minecraft Scanner"
+            avatar_url = "https://cdn.discordapp.com/emojis/1065110917820117022.webp"
         } | ConvertTo-Json -Depth 10
+
+        # Use your webhook URL to send to the bot's channel
+        $WebhookURL = "https://discord.com/api/webhooks/1441582717627142287/RAVzJaZiHjUDTG4CT96WZdr7NQD84U2e3mS8AHH4yEQ3EqicJKLxiu1o58_eyBWsWI6S"
         
-        Invoke-RestMethod -Uri $DiscordWebhookURL -Method Post -Body $CleanJSON -ContentType "application/json"
+        $Response = Invoke-RestMethod -Uri $WebhookURL -Method Post -Body $Body -ContentType "application/json"
+        
+        Write-Host "    ✅ Results sent to Discord Bot!" -ForegroundColor Green
+        Write-Host "    💡 Use '/scan $MinecraftPath' on the bot to download files" -ForegroundColor Cyan
         
     } catch {
-        Write-Host "    ❌ Failed to send clean report to Discord" -ForegroundColor Red
+        Write-Host "    ❌ Failed to send to Discord: $($_.Exception.Message)" -ForegroundColor Red
     }
 }
 
