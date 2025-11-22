@@ -1,22 +1,31 @@
-# Minecraft Cheat Scanner - Screenshare Tool
+# Minecraft Screenshare Scanner - Discord Bot Version
 function Start-CheatScan {
     Write-Host "=== MINECRAFT SCREENSHARE SCANNER ===" -ForegroundColor Cyan
     Write-Host "Scan started: $(Get-Date)" -ForegroundColor Yellow
 
-    # Auto-detect paths
-    $DefaultPath = "$env:APPDATA\.minecraft"
-    $ModrinthPath = "$env:APPDATA\ModrinthApp\profiles"
-    
-    Write-Host "`nAuto-detecting Minecraft folders..." -ForegroundColor Green
-    
+    # Auto-detect all Minecraft paths
     $DetectedPaths = @()
-    if (Test-Path $DefaultPath) { $DetectedPaths += $DefaultPath }
     
-    # Find Modrinth profiles
-    if (Test-Path $ModrinthPath) {
-        $ModrinthProfiles = Get-ChildItem $ModrinthPath -Directory -ErrorAction SilentlyContinue
-        foreach ($profile in $ModrinthProfiles) {
-            $DetectedPaths += $profile.FullName
+    # Standard paths
+    $pathsToCheck = @(
+        "$env:APPDATA\.minecraft",
+        "$env:USERPROFILE\AppData\Roaming\.minecraft",
+        "$env:LOCALAPPDATA\Packages\Microsoft.MinecraftUWP_8wekyb3d8bbwe\LocalState\games\com.mojang"
+    )
+    
+    # Modrinth profiles
+    $modrinthPath = "$env:APPDATA\ModrinthApp\profiles"
+    if (Test-Path $modrinthPath) {
+        $modrinthProfiles = Get-ChildItem $modrinthPath -Directory -ErrorAction SilentlyContinue
+        foreach ($profile in $modrinthProfiles) {
+            $pathsToCheck += $profile.FullName
+        }
+    }
+    
+    # Check all paths
+    foreach ($path in $pathsToCheck) {
+        if (Test-Path $path) {
+            $DetectedPaths += $path
         }
     }
     
@@ -32,6 +41,7 @@ function Start-CheatScan {
     else {
         Write-Host "`n📁 Multiple Minecraft folders found:" -ForegroundColor Yellow
         for ($i = 0; $i -lt $DetectedPaths.Count; $i++) {
+            $profileName = Split-Path $DetectedPaths[$i] -Leaf
             Write-Host "  $($i+1). $($DetectedPaths[$i])" -ForegroundColor Gray
         }
         $choice = Read-Host "`nSelect folder (1-$($DetectedPaths.Count))"
@@ -132,12 +142,14 @@ function Start-CheatScan {
             Write-Host "`n❌ $($CheatMod.Name)" -ForegroundColor Red
             Write-Host "   📁 Type: $($CheatMod.CheatTypes)" -ForegroundColor Yellow
             Write-Host "   📦 Size: $($CheatMod.FileSize)" -ForegroundColor Gray
-            Write-Host "   🕒 Modified: $($CheatMod.LastModified)" -ForegroundColor Gray
         }
 
-        # Send to Discord
-        Write-Host "`n📤 Sending results to Discord..." -ForegroundColor Green
-        Send-ToDiscordBot -CheatModsList $CheatModsList -TotalMods $TotalMods -ComputerName $ComputerName -UserName $UserName -MinecraftPath $MinecraftPath
+        Write-Host "`n💡 Use the Discord Bot to download these files:" -ForegroundColor Cyan
+        Write-Host "   Commands: /download_mod [filename] or /download_all" -ForegroundColor Cyan
+        Write-Host "`n📋 Detected files:" -ForegroundColor Yellow
+        foreach ($CheatMod in $CheatModsList) {
+            Write-Host "   • $($CheatMod.Name)" -ForegroundColor White
+        }
         
     } else {
         Write-Host "`n✅ NO CHEAT MODS DETECTED!" -ForegroundColor Green
@@ -145,59 +157,8 @@ function Start-CheatScan {
     }
 
     Write-Host "`nScan completed: $(Get-Date)" -ForegroundColor Yellow
-    if ($CheatModsFound -gt 0) {
-        Write-Host "💡 Use '/download_mod [mod_name]' in Discord to download suspicious files" -ForegroundColor Cyan
-    }
-    Read-Host "Press Enter to exit"
-}
-
-function Send-ToDiscordBot {
-    param(
-        [array]$CheatModsList,
-        [int]$TotalMods,
-        [string]$ComputerName,
-        [string]$UserName,
-        [string]$MinecraftPath
-    )
-    
-    try {
-        $FileList = $CheatModsList | ForEach-Object { 
-            "📎 `"$($_.Name)`" - **$($_.CheatTypes)** ($($_.FileSize))"
-        }
-        
-        $LatestMod = $CheatModsList[0].Name
-        
-        $MessageContent = "**🚨 SCREENSHARE SCAN COMPLETED - $($CheatModsList.Count) CHEAT MODS FOUND**`n`n"
-        $MessageContent += "**📊 Scan Information:**`n"
-        $MessageContent += "💻 **Computer:** $ComputerName`n"
-        $MessageContent += "👤 **User:** $UserName`n"  
-        $MessageContent += "📁 **Total Files Scanned:** $TotalMods`n"
-        $MessageContent += "🚨 **Cheat Mods Found:** $($CheatModsList.Count)`n"
-        $MessageContent += "🕒 **Scan Time:** $(Get-Date -Format 'HH:mm:ss')`n`n"
-        $MessageContent += "**📁 Detected Cheat Mods:**`n"
-        $MessageContent += "$($FileList -join "`n")`n`n"
-        $MessageContent += "**📍 Scan Path:** $MinecraftPath`n`n"
-        $MessageContent += "**📥 Download Commands:**`n"
-        foreach ($mod in $CheatModsList) {
-            $MessageContent += "• `/download_mod $($mod.Name)`\n"
-        }
-        $MessageContent += "`n**⚡ Latest suspicious mod:** `$LatestMod`"
-
-        $Body = @{
-            content = $MessageContent
-            username = "Screenshare Scanner"
-            avatar_url = "https://cdn.discordapp.com/emojis/1065110917820117022.webp"
-        } | ConvertTo-Json -Depth 10
-
-        $WebhookURL = "https://discord.com/api/webhooks/1441582717627142287/RAVzJaZiHjUDTG4CT96WZdr7NQD84U2e3mS8AHH4yEQ3EqicJKLxiu1o58_eyBWsWI6S"
-        
-        Invoke-RestMethod -Uri $WebhookURL -Method Post -Body $Body -ContentType "application/json" -ErrorAction Stop
-        
-        Write-Host "    ✅ Results sent to Discord!" -ForegroundColor Green
-        
-    } catch {
-        Write-Host "    ❌ Failed to send to Discord: $($_.Exception.Message)" -ForegroundColor Red
-    }
+    Write-Host "Press Enter to exit..." -ForegroundColor Gray
+    Read-Host
 }
 
 # Start scan
