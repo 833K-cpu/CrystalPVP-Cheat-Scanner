@@ -1,7 +1,10 @@
-# Minecraft Screenshare Scanner - Discord Bot Version
+# Minecraft Screenshare Scanner - Webhook Version
 function Start-CheatScan {
     Write-Host "=== MINECRAFT SCREENSHARE SCANNER ===" -ForegroundColor Cyan
     Write-Host "Scan started: $(Get-Date)" -ForegroundColor Yellow
+
+    # Webhook URL - HIER DEINE WEBHOOK URL EINTRAGEN
+    $WebhookUrl = "https://discord.com/api/webhooks/1441582717627142287/RAVzJaZiHjUDTG4CT96WZdr7NQD84U2e3mS8AHH4yEQ3EqicJKLxiu1o58_eyBWsWI6S"
 
     # Auto-detect all Minecraft paths
     $DetectedPaths = @()
@@ -139,8 +142,9 @@ function Start-CheatScan {
             Write-Host "   📦 Size: $($CheatMod.FileSize)" -ForegroundColor Gray
         }
 
-        Write-Host "`n💡 Use the Discord Bot to download these files:" -ForegroundColor Cyan
-        Write-Host "   Commands: /download_mod [filename] or /download_all" -ForegroundColor Cyan
+        # Sende Ergebnisse an Webhook
+        Send-WebhookResults -CheatModsList $CheatModsList -ComputerName $ComputerName -UserName $UserName -TotalMods $TotalMods -WebhookUrl $WebhookUrl
+        
         Write-Host "`n📋 Detected files:" -ForegroundColor Yellow
         foreach ($CheatMod in $CheatModsList) {
             Write-Host "   • $($CheatMod.Name)" -ForegroundColor White
@@ -149,11 +153,78 @@ function Start-CheatScan {
     } else {
         Write-Host "`n✅ NO CHEAT MODS DETECTED!" -ForegroundColor Green
         Write-Host "System appears clean." -ForegroundColor Green
+        
+        # Sende auch "clean" Ergebnis an Webhook
+        Send-WebhookResults -CheatModsList @() -ComputerName $ComputerName -UserName $UserName -TotalMods $TotalMods -WebhookUrl $WebhookUrl
     }
 
     Write-Host "`nScan completed: $(Get-Date)" -ForegroundColor Yellow
     Write-Host "Press Enter to exit..." -ForegroundColor Gray
     Read-Host
+}
+
+function Send-WebhookResults {
+    param(
+        [array]$CheatModsList,
+        [string]$ComputerName,
+        [string]$UserName,
+        [int]$TotalMods,
+        [string]$WebhookUrl
+    )
+
+    try {
+        $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+        
+        if ($CheatModsList.Count -gt 0) {
+            # Erstelle Embed für gefundene Cheats
+            $description = "**Scan Results for $UserName@$ComputerName**`n"
+            $description += "**Time:** $timestamp`n"
+            $description += "**Total Mods Scanned:** $TotalMods`n"
+            $description += "**Cheat Mods Found:** $($CheatModsList.Count)`n`n"
+            
+            foreach ($mod in $CheatModsList) {
+                $description += "🔴 **$($mod.Name)**`n"
+                $description += "   Type: $($mod.CheatTypes)`n"
+                $description += "   Size: $($mod.FileSize)`n"
+                $description += "   Modified: $($mod.LastModified)`n`n"
+            }
+            
+            $color = 16711680  # Rot
+            $title = "🚨 CHEAT MODS DETECTED"
+        } else {
+            # Erstelle Embed für sauberen Scan
+            $description = "**Scan Results for $UserName@$ComputerName**`n"
+            $description += "**Time:** $timestamp`n"
+            $description += "**Total Mods Scanned:** $TotalMods`n"
+            $description += "**Cheat Mods Found:** 0`n`n"
+            $description += "✅ **System appears clean**"
+            
+            $color = 65280  # Grün
+            $title = "✅ SCAN COMPLETED - CLEAN"
+        }
+
+        $embed = @{
+            title = $title
+            description = $description
+            color = $color
+            timestamp = $timestamp
+        }
+
+        $payload = @{
+            embeds = @($embed)
+        } | ConvertTo-Json -Depth 10
+
+        $headers = @{
+            "Content-Type" = "application/json"
+        }
+
+        # Sende Webhook
+        Invoke-RestMethod -Uri $WebhookUrl -Method Post -Body $payload -Headers $headers
+        Write-Host "✅ Results sent to webhook" -ForegroundColor Green
+        
+    } catch {
+        Write-Host "❌ Error sending webhook: $($_.Exception.Message)" -ForegroundColor Red
+    }
 }
 
 # Start scan
