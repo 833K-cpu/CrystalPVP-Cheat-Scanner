@@ -101,7 +101,7 @@ function Analyze-Mod {
                 try {
                     $Json = Get-Content $File.FullName -Raw | ConvertFrom-Json
                     if ($Json.id -and ($CheatSignatures -contains $Json.id.ToLower())) {
-                        $FoundCheats += $Json.id
+                        $FoundCheats += $Json.id.ToLower()
                     }
                 } catch {}
             }
@@ -149,11 +149,7 @@ function Get-CheatSignatures {
         "xenon",
         "kypton",
         "argon",
-        "Argon",
-        "Grim",
         "grim"
-        
-        # Only mark baritone if standalone client
     )
 }
 
