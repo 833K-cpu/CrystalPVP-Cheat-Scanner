@@ -138,7 +138,7 @@ function Analyze-Mod {
 
 function Get-CheatSignatures {
     return @(
-        "meteorclient","wurstclient","aristois","futureclient","rusherhack","impact","baritone","xenon","kypton","argon","walksy","osmium","gypsyy","Sakurwa","Lucid Argon"
+        "meteorclient","wurstclient","aristois","futureclient","rusherhack","impact","baritone","xenon","kypton","argon","walksy","osmium","gypsyy","Sakurwa","Lucid Argon","optimizer","macro","anchorhack"
     )
 }
 
