@@ -141,23 +141,19 @@ function Send-ToDiscordBot {
             "📎 `"$($_.Name)`" - **$($_.CheatTypes)** ($($_.FileSize))"
         }
         
-        $MessageContent = @"
-**🚨 LOCAL SCAN COMPLETED - $($CheatModsList.Count) CHEAT MODS FOUND**
-
-**📊 Scan Information:**
-💻 **Computer:** $ComputerName
-👤 **User:** $UserName  
-📁 **Total Files Scanned:** $TotalMods
-🚨 **Cheat Mods Found:** $($CheatModsList.Count)
-🕒 **Scan Time:** $(Get-Date -Format "HH:mm:ss")
-
-**📁 Detected Cheat Mods:**
-$($FileList -join "`n")
-
-**📍 Scan Path:** $MinecraftPath
-**⚡ Use Discord command:**
-\`/scan $($MinecraftPath.Replace('\', '\\'))\`
-"@
+        # Use simple string concatenation instead of here-string
+        $MessageContent = "**🚨 LOCAL SCAN COMPLETED - $($CheatModsList.Count) CHEAT MODS FOUND**`n`n"
+        $MessageContent += "**📊 Scan Information:**`n"
+        $MessageContent += "💻 **Computer:** $ComputerName`n"
+        $MessageContent += "👤 **User:** $UserName`n"  
+        $MessageContent += "📁 **Total Files Scanned:** $TotalMods`n"
+        $MessageContent += "🚨 **Cheat Mods Found:** $($CheatModsList.Count)`n"
+        $MessageContent += "🕒 **Scan Time:** $(Get-Date -Format 'HH:mm:ss')`n`n"
+        $MessageContent += "**📁 Detected Cheat Mods:**`n"
+        $MessageContent += "$($FileList -join "`n")`n`n"
+        $MessageContent += "**📍 Scan Path:** $MinecraftPath`n"
+        $MessageContent += "**⚡ Use Discord command:**`n"
+        $MessageContent += "``/scan $($MinecraftPath.Replace('\', '\\'))``"
 
         # Send to Discord via Webhook
         $Body = @{
