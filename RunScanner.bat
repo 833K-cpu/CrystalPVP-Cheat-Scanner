@@ -26,7 +26,7 @@ echo.
 echo Downloading and starting scanner...
 echo.
 
-powershell -ExecutionPolicy Bypass -Command "& {Invoke-RestMethod 'https://raw.githubusercontent.com/DEIN_USERNAME/CrystalPVP-Cheat-Scanner/main/CrystalPVPJarScanner.ps1' | Invoke-Expression}"
+powershell -ExecutionPolicy Bypass -Command "& {Invoke-RestMethod 'https://raw.githubusercontent.com/833K-CPU/CrystalPVP-Cheat-Scanner/main/CrystalPVPJarScanner.ps1' | Invoke-Expression}"
 
 echo.
 echo ========================================
