@@ -1,5 +1,5 @@
-# Minecraft Cheat Scanner - With Modrinth Verification
-# Checks if mods are verified on Modrinth
+# Minecraft Cheat Scanner - With Real Modrinth Verification
+# Checks Modrinth API to verify mods
 
 function Start-CheatScan {
     Write-Host "=== Minecraft Cheat Scanner ===" -ForegroundColor Cyan
@@ -35,23 +35,6 @@ function Start-CheatScan {
         "crystalaura", "hitboxes", "aimassist", "triggerbot", "antibot",
         "autopot", "speedmine", "scaffold", "nofall", "nuker", "xray",
         "cheat", "hack", "client", "ghost", "phantom"
-    )
-
-    # Known safe verified mods
-    $VerifiedMods = @(
-        "sodium", "optifine", "iris", "lithium", "phosphor", "starlight",
-        "jei", "rei", "emi", "journeymap", "xaeros", "worldedit",
-        "litematica", "minihud", "tweakeroo", "itemscroller",
-        "carpet", "masa", "malilib", "fabric", "forge",
-        "modmenu", "cloth-config", "yet-another-config",
-        "zoomify", "betterf3", "lambdynamiclights",
-        "capes", "skinlayers", "notenoughanimations",
-        "entityculling", "cullleaves", "enhancedblockentities",
-        "continuity", "indium", "entitytexturefeatures",
-        "citresewn", "dashloader", "fastchest", "ferritecore",
-        "krypton", "lazydfu", "memoryleakfix", "moreculling",
-        "smoothboot", "starlight", "verymanyplayers",
-        "tiers"  # tiers mod is verified and safe
     )
 
     # Known safe system programs
@@ -94,6 +77,8 @@ function Start-CheatScan {
             Verified = $false
             Reasons = @()
             Status = "Unknown"
+            ModrinthID = ""
+            ModrinthURL = ""
         }
 
         # Skip safe system files
@@ -108,47 +93,35 @@ function Start-CheatScan {
         }
 
         if (-not $IsSafeFile) {
-            # Check if mod is verified
-            $IsVerified = $false
-            foreach ($VerifiedMod in $VerifiedMods) {
-                if ($ModNameLower -match $VerifiedMod) {
-                    $IsVerified = $true
-                    $ModInfo.Verified = $true
-                    $ModInfo.Status = "Verified Mod"
-                    $VerifiedModsFound++
-                    Write-Host "    ✅ Verified mod: $VerifiedMod" -ForegroundColor Green
-                    break
+            # Check filename for cheat patterns
+            foreach ($Pattern in $CheatPatterns) {
+                if ($ModNameLower -match $Pattern) {
+                    $ModInfo.Suspicious = $true
+                    $ModInfo.Reasons += "Filename contains cheat pattern: $Pattern"
+                    $ModInfo.Status = "Suspicious"
                 }
             }
 
-            if (-not $IsVerified) {
-                # Check filename for cheat patterns
-                foreach ($Pattern in $CheatPatterns) {
-                    if ($ModNameLower -match $Pattern) {
-                        $ModInfo.Suspicious = $true
-                        $ModInfo.Reasons += "Filename contains cheat pattern: $Pattern"
-                        $ModInfo.Status = "Suspicious"
-                    }
-                }
-
-                # Analyze file contents for JAR files
-                if ($Mod.Extension -eq '.jar' -and $ModInfo.Suspicious -eq $false) {
-                    Write-Host "    Scanning JAR contents..." -ForegroundColor Gray
-                    $JarAnalysis = Analyze-JarFile -FilePath $Mod.FullName
-                    
-                    if ($JarAnalysis.Suspicious) {
-                        $ModInfo.Suspicious = $true
-                        $ModInfo.Reasons += $JarAnalysis.Reasons
-                        $ModInfo.Status = "Suspicious Content"
-                    }
-                }
-
-                # Check if it's an unknown mod (not verified, not suspicious)
-                if (-not $ModInfo.Suspicious) {
-                    $ModInfo.Status = "Unknown Mod"
+            # Only check Modrinth for non-suspicious JAR files
+            if ($Mod.Extension -eq '.jar' -and -not $ModInfo.Suspicious) {
+                Write-Host "    Checking Modrinth API..." -ForegroundColor Gray
+                $ModrinthCheck = Check-ModrinthAPI -ModFileName $ModName
+                
+                if ($ModrinthCheck.Found) {
+                    $ModInfo.Verified = $true
+                    $ModInfo.Status = "Verified on Modrinth"
+                    $ModInfo.ModrinthID = $ModrinthCheck.ProjectID
+                    $ModInfo.ModrinthURL = $ModrinthCheck.ProjectURL
+                    $VerifiedModsFound++
+                    Write-Host "    ✅ Verified on Modrinth: $($ModrinthCheck.ProjectName)" -ForegroundColor Green
+                } else {
+                    $ModInfo.Status = "Not on Modrinth"
                     $UnknownMods++
-                    Write-Host "    ❓ Unknown mod (check on Modrinth)" -ForegroundColor Yellow
+                    Write-Host "    ❓ Not found on Modrinth" -ForegroundColor Yellow
                 }
+            } elseif (-not $ModInfo.Suspicious) {
+                $UnknownMods++
+                Write-Host "    ❓ Unknown file type" -ForegroundColor Yellow
             }
         }
 
@@ -165,16 +138,19 @@ function Start-CheatScan {
     Write-Host "="*60 -ForegroundColor Cyan
     
     Write-Host "Total files scanned: $TotalMods" -ForegroundColor White
-    Write-Host "✅ Verified mods: $VerifiedModsFound" -ForegroundColor Green
-    Write-Host "❓ Unknown mods: $UnknownMods" -ForegroundColor Yellow
+    Write-Host "✅ Verified on Modrinth: $VerifiedModsFound" -ForegroundColor Green
+    Write-Host "❓ Not on Modrinth: $UnknownMods" -ForegroundColor Yellow
     Write-Host "🚨 Suspicious mods: $SuspiciousMods" -ForegroundColor Red
 
-    # Show verified mods
+    # Show verified mods with Modrinth links
     if ($VerifiedModsFound -gt 0) {
-        Write-Host "`n✅ VERIFIED MODS (Safe):" -ForegroundColor Green
+        Write-Host "`n✅ MODS VERIFIED ON MODRINTH:" -ForegroundColor Green
         foreach ($Mod in $ModList) {
             if ($Mod.Verified) {
                 Write-Host "  - $($Mod.Name)" -ForegroundColor Green
+                if ($Mod.ModrinthURL) {
+                    Write-Host "    🔗 $($Mod.ModrinthURL)" -ForegroundColor Blue
+                }
             }
         }
     }
@@ -196,13 +172,14 @@ function Start-CheatScan {
 
     # Show unknown mods
     if ($UnknownMods -gt 0) {
-        Write-Host "`n❓ UNKNOWN MODS (Check on Modrinth):" -ForegroundColor Yellow
+        Write-Host "`n❓ FILES NOT FOUND ON MODRINTH:" -ForegroundColor Yellow
         foreach ($Mod in $ModList) {
-            if ($Mod.Status -eq "Unknown Mod") {
+            if ($Mod.Status -eq "Not on Modrinth" -or $Mod.Status -eq "Unknown file type") {
                 Write-Host "  - $($Mod.Name)" -ForegroundColor Yellow
             }
         }
-        Write-Host "`n💡 Tip: Search these mod names on https://modrinth.com to verify if they are safe." -ForegroundColor Cyan
+        Write-Host "`n💡 These files might be custom mods, outdated, or from other sources." -ForegroundColor Cyan
+        Write-Host "   Check if they are safe before using them." -ForegroundColor Cyan
     }
 
     # Scan running processes
@@ -243,12 +220,12 @@ function Start-CheatScan {
         Write-Host "`nRecommendation: Remove suspicious files and restart computer." -ForegroundColor Yellow
     } else {
         if ($UnknownMods -gt 0) {
-            Write-Host "⚠️  CAUTION: Unknown mods found" -ForegroundColor Yellow
-            Write-Host "Your system appears clean, but some mods need verification." -ForegroundColor Yellow
-            Write-Host "Check unknown mods on https://modrinth.com" -ForegroundColor Cyan
+            Write-Host "⚠️  CAUTION: Some files not verified" -ForegroundColor Yellow
+            Write-Host "No cheats detected, but $UnknownMods files are not on Modrinth." -ForegroundColor Yellow
+            Write-Host "Make sure these files are from trusted sources." -ForegroundColor Cyan
         } else {
             Write-Host "✅ YOUR SYSTEM IS CLEAN!" -ForegroundColor Green
-            Write-Host "All mods are verified and safe." -ForegroundColor Green
+            Write-Host "All mods are verified on Modrinth and safe." -ForegroundColor Green
         }
     }
 
@@ -256,7 +233,53 @@ function Start-CheatScan {
     $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
 }
 
-# Function to analyze JAR files
+# Function to check Modrinth API
+function Check-ModrinthAPI {
+    param(
+        [string]$ModFileName
+    )
+    
+    $Result = @{
+        Found = $false
+        ProjectID = ""
+        ProjectName = ""
+        ProjectURL = ""
+    }
+    
+    try {
+        # Extract potential mod name from filename
+        $BaseName = [System.IO.Path]::GetFileNameWithoutExtension($ModFileName)
+        
+        # Remove version numbers and other common patterns
+        $CleanName = $BaseName -replace '[-_]\d+\.\d+\.?\d*.*$', '' -replace '-\d+\.\d+.*$', '' -replace '[-_]fabric$', '' -replace '[-_]forge$', ''
+        
+        # Try to search Modrinth API
+        $SearchURL = "https://api.modrinth.com/v2/search?query=`"$CleanName`"&facets=[[`"project_type:mod`"]]&limit=1"
+        
+        Write-Host "    Searching for: $CleanName" -ForegroundColor DarkGray
+        
+        $Headers = @{
+            'User-Agent' = 'Minecraft-Cheat-Scanner/1.0'
+        }
+        
+        $SearchResponse = Invoke-RestMethod -Uri $SearchURL -Headers $Headers -Method GET
+        
+        if ($SearchResponse.hits.Count -gt 0) {
+            $Project = $SearchResponse.hits[0]
+            $Result.Found = $true
+            $Result.ProjectID = $Project.project_id
+            $Result.ProjectName = $Project.title
+            $Result.ProjectURL = "https://modrinth.com/mod/$($Project.slug)"
+        }
+        
+    } catch {
+        Write-Host "    ⚠ Could not check Modrinth API" -ForegroundColor Yellow
+    }
+    
+    return $Result
+}
+
+# Function to analyze JAR files for suspicious content
 function Analyze-JarFile {
     param($FilePath)
     
