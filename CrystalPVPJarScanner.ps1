@@ -1,120 +1,88 @@
 # CrystalPVPJarScanner.ps1
-# Zero False-Positive Minecraft Mod Scanner
-# Detects only known cheat clients, ignores normal mods
+# Auto-detect running Minecraft instance (Modrinth/MultiMC/Vanilla) and scan mods
+# Zero false positives — only detects known PVP cheat clients
 
-# Optional Discord Webhook
-$WebhookUrl = ""  # Insert your webhook here
+$WebhookUrl = ""  # Optional: Discord webhook
 
-# -----------------------------
-# Helper: Normalize Path
-# -----------------------------
-function Normalize-Path {
-    param([string]$Path)
-    if ($Path) {
-        $Path = $Path.Trim('"')      # Remove quotes
-        $Path = $Path.Trim()         # Remove whitespace
+# List of known cheat client IDs or package names
+$CheatSignatures = @(
+    "meteorclient",
+    "wurstclient",
+    "aristois",
+    "futureclient",
+    "rusherhack",
+    "lambda",
+    "impact",
+    "xenon",
+    "grimhack"
+)
+
+function Start-CheatScan {
+    Write-Host "=== CrystalPVPJarScanner ===" -ForegroundColor Cyan
+    Write-Host "Scan started: $(Get-Date)" -ForegroundColor Yellow
+
+    $MinecraftPath = $null
+
+    # Detect running Minecraft process
+    $javaProcesses = Get-Process java,javaw,wjava -ErrorAction SilentlyContinue
+    foreach ($p in $javaProcesses) {
         try {
-            $Path = [System.IO.Path]::GetFullPath($Path)
-            if (Test-Path $Path) { return $Path }
+            $cmd = (Get-CimInstance Win32_Process -Filter "ProcessId=$($p.Id)").CommandLine
+            if ($cmd) {
+                if ($cmd -match "(\\AppData\\Roaming\\.minecraft)") { $MinecraftPath = $matches[1]; break }
+                if ($cmd -match "(\\AppData\\Roaming\\ModrinthApp\\profiles\\[^ ]+)") { $MinecraftPath = $matches[1]; break }
+                if ($cmd -match "(\\MultiMC\\instances\\[^ ]+)") { $MinecraftPath = $matches[1]; break }
+                if ($cmd -match "(\\AppData\\Roaming\\.lunarclient\\offline\\[^ ]+)") { $MinecraftPath = $matches[1]; break }
+                if ($cmd -match "(\\AppData\\Roaming\\.badlionclient\\.minecraft)") { $MinecraftPath = $matches[1]; break }
+            }
         } catch {}
     }
-    return $null
-}
 
-# -----------------------------
-# Main Scanner
-# -----------------------------
-function Start-CheatScan {
-    try {
-        Write-Host "=== CrystalPVPJarScanner ===" -ForegroundColor Cyan
-        Write-Host "Scan started: $(Get-Date)" -ForegroundColor Yellow
-
-        # 1) Detect running Minecraft process
-        $MinecraftPath = $null
-        $runningMC = Get-Process java,javaw,wjava -ErrorAction SilentlyContinue
-        foreach ($p in $runningMC) {
-            try {
-                $cmd = (Get-CimInstance Win32_Process -Filter "ProcessId=$($p.Id)").CommandLine
-                if ($cmd -match "\.minecraft") {
-                    $match = [regex]::Match($cmd, "(.*?\.minecraft)")
-                    if ($match.Success) {
-                        $MinecraftPath = Normalize-Path $match.Groups[1].Value
-                        if ($MinecraftPath) { break }
-                    }
-                }
-            } catch {}
-        }
-
-        # 2) Fallback: ask user if not found
-        if (-not $MinecraftPath) {
-            Write-Host "🟡 Minecraft not running or profile not detected."
-            $InputPath = Read-Host "Enter your Minecraft/Modrinth/MultiMC folder path"
-            $MinecraftPath = Normalize-Path $InputPath
-        }
-
-        # 3) Final fallback: default .minecraft
-        if (-not $MinecraftPath) {
-            $MinecraftPath = Join-Path $env:APPDATA ".minecraft"
-            $MinecraftPath = Normalize-Path $MinecraftPath
-            Write-Host "🟡 Using default path: $MinecraftPath" -ForegroundColor Yellow
-        }
-
-        # 4) Mods folder
-        $ModsPath = Join-Path $MinecraftPath "mods"
-        $ModsPath = Normalize-Path $ModsPath
-        if (-not $ModsPath) {
-            throw "Mods folder not found in $MinecraftPath"
-        }
-
-        Write-Host "`n🔍 Scanning mods in: $ModsPath" -ForegroundColor Green
-
-        # 5) Scan each .jar
-        $ModFiles = Get-ChildItem $ModsPath -Filter "*.jar" -ErrorAction Stop
-        $CheatMods = @()
-
-        foreach ($Mod in $ModFiles) {
-            Write-Host "`nAnalyzing: $($Mod.Name)" -ForegroundColor DarkGray
-            $Analysis = Analyze-Mod -JarPath $Mod.FullName -ModName $Mod.Name
-            if ($Analysis.IsSuspicious) {
-                Write-Host "🚨 Suspicious: $($Analysis.Reason)" -ForegroundColor Red
-                $CheatMods += $Analysis
-            } else {
-                Write-Host "✅ Clean" -ForegroundColor Green
-            }
-        }
-
-        # -------------------------
-        # Results
-        # -------------------------
-        Write-Host "`n===== SCAN RESULTS =====" -ForegroundColor Cyan
-        Write-Host "Mods scanned: $($ModFiles.Count)" -ForegroundColor White
-        Write-Host "Suspicious mods: $($CheatMods.Count)" -ForegroundColor Yellow
-
-        foreach ($Item in $CheatMods) {
-            Write-Host "`n❌ $($Item.Mod)" -ForegroundColor Red
-            Write-Host "   ➤ Reason: $($Item.Reason)" -ForegroundColor Yellow
-        }
-
-        # Optional webhook
-        Send-Webhook -CheatMods $CheatMods
-
-        Write-Host "`nScan completed." -ForegroundColor Green
-        Read-Host "Press Enter to exit..."
-
-    } catch {
-        Write-Host "❌ Fatal error: $($_.Exception.Message)" -ForegroundColor Red
-        Read-Host "Press Enter to exit..."
+    # Fallback: ask user
+    if (-not $MinecraftPath) {
+        Write-Host "🟡 Minecraft not running or profile not detected."
+        $MinecraftPath = Read-Host "Enter your Minecraft/Modrinth/MultiMC folder path"
     }
+
+    $ModsPath = Join-Path $MinecraftPath "mods"
+    if (-not (Test-Path $ModsPath)) {
+        Write-Host "❌ Mods folder not found: $ModsPath" -ForegroundColor Red
+        return
+    }
+
+    Write-Host "🔍 Scanning mods in: $ModsPath" -ForegroundColor Green
+
+    $modFiles = Get-ChildItem $ModsPath -Filter "*.jar" -ErrorAction SilentlyContinue
+    $CheatMods = @()
+
+    foreach ($mod in $modFiles) {
+        Write-Host "`nAnalyzing: $($mod.Name)" -ForegroundColor DarkGray
+        $Analysis = Analyze-Mod -JarPath $mod.FullName -ModName $mod.Name
+        if ($Analysis.IsSuspicious) {
+            Write-Host "🚨 Suspicious: $($Analysis.Reason)" -ForegroundColor Red
+            $CheatMods += $Analysis
+        } else {
+            Write-Host "✅ Clean" -ForegroundColor Green
+        }
+    }
+
+    Write-Host "`n===== SCAN RESULTS =====" -ForegroundColor Cyan
+    Write-Host "Mods scanned: $($modFiles.Count)" -ForegroundColor White
+    Write-Host "Suspicious mods: $($CheatMods.Count)" -ForegroundColor Yellow
+
+    foreach ($Item in $CheatMods) {
+        Write-Host "`n❌ $($Item.Mod)" -ForegroundColor Red
+        Write-Host "   ➤ Reason: $($Item.Reason)" -ForegroundColor Yellow
+    }
+
+    Send-Webhook -CheatMods $CheatMods
+    Write-Host "`nScan completed." -ForegroundColor Green
+    Read-Host "Press Enter to exit..."
 }
 
-# -----------------------------
 # Analyze a single mod
-# -----------------------------
 function Analyze-Mod {
-    param(
-        [string]$JarPath,
-        [string]$ModName
-    )
+    param([string]$JarPath, [string]$ModName)
 
     $TempDir = Join-Path $env:TEMP ("scan_" + [guid]::NewGuid())
     New-Item -ItemType Directory -Path $TempDir | Out-Null
@@ -123,12 +91,11 @@ function Analyze-Mod {
         Add-Type -AssemblyName System.IO.Compression.FileSystem
         [System.IO.Compression.ZipFile]::ExtractToDirectory($JarPath, $TempDir)
 
-        $CheatSignatures = Get-CheatSignatures
         $FoundCheats = @()
-
         $Files = Get-ChildItem $TempDir -Recurse -File
+
         foreach ($File in $Files) {
-            # Check mod metadata JSON
+            # Check mod metadata
             if ($File.Name -match "fabric\.mod\.json|mcmod\.info") {
                 try {
                     $Json = Get-Content $File.FullName -Raw | ConvertFrom-Json
@@ -138,12 +105,10 @@ function Analyze-Mod {
                 } catch {}
             }
 
-            # Check package/folder names
+            # Check folder/package names
             $PathLower = $File.FullName.ToLower()
             foreach ($sig in $CheatSignatures) {
-                if ($PathLower -match $sig) {
-                    $FoundCheats += $sig
-                }
+                if ($PathLower -match $sig) { $FoundCheats += $sig }
             }
         }
 
@@ -166,49 +131,20 @@ function Analyze-Mod {
     }
 }
 
-# -----------------------------
-# Known cheat clients
-# -----------------------------
-function Get-CheatSignatures {
-    return @(
-        "meteorclient",
-        "wurstclient",
-        "aristois",
-        "futureclient",
-        "rusherhack",
-        "lambda",
-        "impact",
-        "baritone",
-        "xenon",
-        "kypton",
-        "argon",
-        "grim"
-    )
-}
-
-# -----------------------------
-# Discord webhook sender
-# -----------------------------
+# Optional Discord webhook
 function Send-Webhook {
     param([array]$CheatMods)
     if (-not $WebhookUrl) { return }
-
     try {
         $embed = if ($CheatMods.Count -gt 0) {
             @{ title = "🚨 Suspicious Mods Found"; color = 16711680; description = ($CheatMods | ForEach-Object { "❌ $($_.Mod) — $($_.Reason)" }) -join "`n" }
         } else {
             @{ title = "✅ System Clean"; color = 65280; description = "No suspicious mods detected." }
         }
-
         $payload = @{ embeds = @($embed) } | ConvertTo-Json -Depth 5
         Invoke-RestMethod -Uri $WebhookUrl -Method POST -Body $payload -ContentType "application/json"
         Write-Host "📨 Webhook sent." -ForegroundColor Green
-    } catch {
-        Write-Host "❌ Webhook error: $($_.Exception.Message)" -ForegroundColor Red
-    }
+    } catch { Write-Host "❌ Webhook error: $($_.Exception.Message)" -ForegroundColor Red }
 }
 
-# -----------------------------
-# Start the scan
-# -----------------------------
 Start-CheatScan
