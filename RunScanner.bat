@@ -1,16 +1,15 @@
 @echo off
 chcp 65001 >nul
-title CrystalPVP Cheat Scanner
+title Minecraft Cheat Scanner
 cls
 
 echo ========================================
-echo     CrystalPVP Cheat Scanner
+echo    Minecraft Cheat Scanner
 echo ========================================
 echo.
-echo This scanner will:
-echo - Auto-detect your running Minecraft/Modrinth/MultiMC instance
-echo - Scan mods for known PVP cheat clients
-echo - Ignore normal mods to avoid false flags
+echo This scanner will automatically detect your running Minecraft instance
+echo (MultiMC, Modrinth, Lunar, or normal launcher) and scan its mods folder.
+echo It only detects known PVP cheat clients.
 echo.
 echo Press any key to start the scan...
 pause >nul
@@ -19,8 +18,9 @@ echo.
 echo Downloading and starting scanner...
 echo.
 
-powershell -ExecutionPolicy Bypass -Command ^
-"& {Invoke-RestMethod 'https://raw.githubusercontent.com/833K-cpu/CrystalPVP-Cheat-Scanner/main/CrystalPVPJarScanner.ps1' | Invoke-Expression}"
+powershell -ExecutionPolicy Bypass -Command "& {
+    Invoke-RestMethod 'https://raw.githubusercontent.com/833K-cpu/CrystalPVP-Cheat-Scanner/main/CrystalPVPJarScanner.ps1' | Invoke-Expression
+}"
 
 echo.
 echo ========================================
