@@ -145,7 +145,15 @@ function Get-CheatSignatures {
         "rusherhack",
         "lambda",
         "impact",
-        "baritone"   # Only mark baritone if standalone client
+        "baritone",
+        "xenon",
+        "kypton",
+        "argon",
+        "Argon",
+        "Grim",
+        "grim",
+    
+        # Only mark baritone if standalone client
     )
 }
 
