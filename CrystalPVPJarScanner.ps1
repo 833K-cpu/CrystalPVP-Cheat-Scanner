@@ -1,7 +1,6 @@
 # CrystalPVPJarScanner - Auto-detect running Minecraft folder
 # Zero false-positive PVP mod scanner
-
-$WebhookUrl = "https://discord.com/api/webhooks/1441582717627142287/RAVzJaZiHjUDTG4CT96WZdr7NQD84U2e3mS8AHH4yEQ3EqicJKLxiu1o58_eyBWsWI6S"  # Optional: Insert your Discord webhook
+$WebhookUrl = "https://discord.com/api/webhooks/1441582717627142287/RAVzJaZiHjUDTG4CT96WZdr7NQD84U2e3mS8AHH4yEQ3EqicJKLxiu1o58_eyBWsWI6S"  # Optional
 
 function Start-CheatScan {
     try {
@@ -10,42 +9,33 @@ function Start-CheatScan {
 
         $MinecraftPath = $null
 
-        # --- Step 1: Scan running Java processes for Minecraft ---
+        # --- Detect running Minecraft process ---
         $javaProcesses = Get-Process java,javaw -ErrorAction SilentlyContinue
         foreach ($p in $javaProcesses) {
             try {
                 $cmdLine = (Get-CimInstance Win32_Process -Filter "ProcessId=$($p.Id)").CommandLine
                 if ($cmdLine) {
-                    # Check for Modrinth/MultiMC/Lunar/etc. gameDir
+                    # Try to extract -gameDir parameter
                     if ($cmdLine -match "-gameDir\s+""?([^""\s]+)""?") {
                         $path = $matches[1]
-                        if (Test-Path $path) {
-                            $MinecraftPath = $path
-                            break
-                        }
+                        if (Test-Path $path) { $MinecraftPath = $path; break }
                     }
-                    # Fallback: check for .minecraft in path
+                    # Fallback: look for .minecraft in path
                     elseif ($cmdLine -match "([a-zA-Z]:\\.*?\.minecraft)") {
                         $path = $matches[1]
-                        if (Test-Path $path) {
-                            $MinecraftPath = $path
-                            break
-                        }
+                        if (Test-Path $path) { $MinecraftPath = $path; break }
                     }
                 }
             } catch {}
         }
 
-        # --- Step 2: Ask user if nothing detected ---
         if (-not $MinecraftPath) {
-            Write-Host "🟡 Minecraft not running or profile not detected."
-            $MinecraftPath = Read-Host "Enter your Minecraft/Modrinth/MultiMC folder path"
+            throw "❌ No running Minecraft instance detected. Please start Minecraft before scanning."
         }
 
-        # --- Step 3: Set mods path ---
         $ModsPath = Join-Path $MinecraftPath "mods"
         if (-not (Test-Path $ModsPath)) {
-            throw "Mods folder not found: $ModsPath"
+            throw "❌ Mods folder not found at $ModsPath"
         }
 
         Write-Host "`n🔍 Scanning mods in: $ModsPath" -ForegroundColor Green
@@ -74,21 +64,19 @@ function Start-CheatScan {
             Write-Host "   ➤ Reason: $($Item.Reason)" -ForegroundColor Yellow
         }
 
-        # Optional: send webhook
         Send-Webhook -CheatMods $CheatMods
 
         Write-Host "`nScan completed." -ForegroundColor Green
         Read-Host "Press Enter to exit..."
 
     } catch {
-        Write-Host "❌ Fatal error: $($_.Exception.Message)" -ForegroundColor Red
+        Write-Host $_.Exception.Message -ForegroundColor Red
         Read-Host "Press Enter to exit..."
     }
 }
 
 function Analyze-Mod {
     param([string]$JarPath, [string]$ModName)
-
     $TempDir = Join-Path $env:TEMP ("scan_" + [guid]::NewGuid())
     New-Item -ItemType Directory -Path $TempDir | Out-Null
 
@@ -138,7 +126,9 @@ function Analyze-Mod {
 
 function Get-CheatSignatures {
     return @(
-        "meteorclient","wurstclient","aristois","futureclient","rusherhack","impact","baritone","xenon","kypton","argon","walksy","Osmium","gypsyy","Sakurwa","Lucid Argon","optimizer","macro","anchorhack","Glazed","clickcrystal"
+        "meteorclient","wurstclient","aristois","futureclient","rusherhack",
+        "impact","baritone","xenon","kypton","argon","walksy","osmium","gypsyy",
+        "sakurwa","lucid argon","optimizer","macro","anchorhack","glazed","clickcrystal"
     )
 }
 
@@ -156,5 +146,5 @@ function Send-Webhook {
     } catch {}
 }
 
-# Start scan
+# --- Start Scan ---
 Start-CheatScan
