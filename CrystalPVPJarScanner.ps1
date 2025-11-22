@@ -23,7 +23,7 @@ function Start-CheatScan {
             try {
                 $cmd = (Get-CimInstance Win32_Process -Filter "ProcessId=$($p.Id)").CommandLine
                 if ($cmd -match "\.minecraft") {
-                    $match = [regex]::Match($cmd, "(.*?\\\.minecraft)")
+                    $match = [regex]::Match($cmd, "(.*?\\.minecraft)")
                     if ($match.Success) {
                         $foundPath = $match.Groups[1].Value
                         break
