@@ -4,12 +4,21 @@ function Start-CheatScan {
     Write-Host "=== Minecraft Cheat Scanner ===" -ForegroundColor Cyan
     Write-Host "Scan started: $(Get-Date)" -ForegroundColor Yellow
 
+    # Try to find Minecraft path automatically
+    $DefaultPath = "$env:APPDATA\.minecraft"
+    $ModrinthPath = "$env:APPDATA\ModrinthApp\profiles"
+    
     Write-Host "`nPlease enter your Minecraft folder path:" -ForegroundColor White
     Write-Host "Examples:" -ForegroundColor Gray
-    Write-Host "  - Default: C:\Users\YourName\AppData\Roaming\.minecraft" -ForegroundColor Gray
-    Write-Host "  - Modrinth: C:\Users\YourName\AppData\Roaming\ModrinthApp\profiles\YourProfile" -ForegroundColor Gray
+    Write-Host "  - Default: $DefaultPath" -ForegroundColor Gray
+    Write-Host "  - Modrinth: $ModrinthPath\YourProfile" -ForegroundColor Gray
+    Write-Host "  - Press Enter to use default path" -ForegroundColor Yellow
 
     $MinecraftPath = Read-Host "`nEnter path"
+    
+    if ([string]::IsNullOrWhiteSpace($MinecraftPath)) {
+        $MinecraftPath = $DefaultPath
+    }
 
     if (-not (Test-Path $MinecraftPath)) {
         Write-Host "ERROR: This path does not exist!" -ForegroundColor Red
@@ -44,7 +53,13 @@ function Start-CheatScan {
     $ComputerName = $env:COMPUTERNAME
     $UserName = $env:USERNAME
 
-    $ModFiles = Get-ChildItem $ModsPath -Filter "*.jar" -ErrorAction SilentlyContinue
+    try {
+        $ModFiles = Get-ChildItem $ModsPath -Filter "*.jar" -ErrorAction Stop
+    } catch {
+        Write-Host "❌ Error accessing mods folder: $($_.Exception.Message)" -ForegroundColor Red
+        Read-Host "Press Enter to exit"
+        exit
+    }
 
     foreach ($Mod in $ModFiles) {
         $TotalMods++
@@ -97,13 +112,14 @@ function Start-CheatScan {
 
         # Send results to Discord Bot
         Write-Host "`n📤 Sending results to Discord Bot..." -ForegroundColor Green
-        Send-ToDiscordBot -CheatModsList $CheatModsList -TotalMods $TotalMods -ComputerName $ComputerName -UserName $UserName
+        Send-ToDiscordBot -CheatModsList $CheatModsList -TotalMods $TotalMods -ComputerName $ComputerName -UserName $UserName -MinecraftPath $MinecraftPath
         
     } else {
         Write-Host "`n✅ NO CHEAT MODS DETECTED!" -ForegroundColor Green
     }
 
-    Write-Host "`nPress any key to exit..." -ForegroundColor Gray
+    Write-Host "`nScan completed: $(Get-Date)" -ForegroundColor Yellow
+    Write-Host "Press any key to exit..." -ForegroundColor Gray
     $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
 }
 
@@ -112,7 +128,8 @@ function Send-ToDiscordBot {
         [array]$CheatModsList,
         [int]$TotalMods,
         [string]$ComputerName,
-        [string]$UserName
+        [string]$UserName,
+        [string]$MinecraftPath
     )
     
     try {
@@ -138,17 +155,16 @@ $($FileList -join "`n")
 **⚡ Run `/scan $MinecraftPath` on the bot to download these files**
 "@
 
-        # Send to Discord via Webhook (Bot needs to listen for webhooks)
+        # Send to Discord via Webhook
         $Body = @{
             content = $MessageContent
             username = "Minecraft Scanner"
             avatar_url = "https://cdn.discordapp.com/emojis/1065110917820117022.webp"
         } | ConvertTo-Json -Depth 10
 
-        # Use your webhook URL to send to the bot's channel
         $WebhookURL = "https://discord.com/api/webhooks/1441582717627142287/RAVzJaZiHjUDTG4CT96WZdr7NQD84U2e3mS8AHH4yEQ3EqicJKLxiu1o58_eyBWsWI6S"
         
-        $Response = Invoke-RestMethod -Uri $WebhookURL -Method Post -Body $Body -ContentType "application/json"
+        $Response = Invoke-RestMethod -Uri $WebhookURL -Method Post -Body $Body -ContentType "application/json" -ErrorAction Stop
         
         Write-Host "    ✅ Results sent to Discord Bot!" -ForegroundColor Green
         Write-Host "    💡 Use '/scan $MinecraftPath' on the bot to download files" -ForegroundColor Cyan
