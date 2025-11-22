@@ -1,5 +1,5 @@
-# Minecraft Cheat Scanner - Deep JAR Content Analysis
-# Opens JAR files and searches for cheat code
+# Minecraft Cheat Scanner - Real Hack Code Detection
+# Only shows mods that contain actual cheat code
 
 function Start-CheatScan {
     Write-Host "=== Minecraft Cheat Scanner ===" -ForegroundColor Cyan
@@ -23,18 +23,29 @@ function Start-CheatScan {
 
     Write-Host "`n✅ Scanning: $MinecraftPath" -ForegroundColor Green
 
-    # Cheat detection patterns
-    $CheatPatterns = @(
-        # Known cheat clients
-        "wurst", "sigma", "impact", "liquidbounce", "raven", "zenith",
-        "novoline", "tenacity", "lambda", "gamesense", "phobos", "konas",
-        "rusherhack", "future", "pyro", "wolfram", "w\+we", "salhack",
-        
-        # Cheat functions
-        "killaura", "velocity", "antiknockback", "reach", "autoclicker",
-        "crystalaura", "hitboxes", "aimassist", "triggerbot", "antibot",
-        "autopot", "speedmine", "scaffold", "nofall", "nuker", "xray",
-        "cheat", "hack", "client", "ghost", "phantom"
+    # Real cheat code patterns - not just filenames
+    $CheatCodePatterns = @(
+        # PVP cheat functions
+        "killaura", "kill.*aura", "aura.*kill",
+        "reach", "attack.*reach", "hit.*reach", 
+        "velocity", "knockback", "antiknockback",
+        "autoclick", "auto.*click", "clicker",
+        "aimassist", "aim.*assist", "aimbot",
+        "triggerbot", "trigger.*bot",
+        "antibot", "anti.*bot",
+        "speedmine", "fast.*mine",
+        "nuker", "block.*nuker",
+        "scaffold", "tower", "bridge",
+        "nofall", "no.*fall",
+        "flight", "fly", "jesus",
+        "speed", "bunny.*hop",
+        "xray", "ore.*esp",
+        "esp", "tracers", "radar",
+        "nametags", "name.*tags",
+        "hitboxes", "hit.*boxes",
+        "crystalaura", "crystal.*aura",
+        "autopot", "auto.*pot",
+        "fastplace", "fast.*place"
     )
 
     # Known safe system programs
@@ -53,194 +64,94 @@ function Start-CheatScan {
         exit
     }
 
-    Write-Host "`n🔍 Analyzing mods (deep scan)..." -ForegroundColor Green
+    Write-Host "`n🔍 Opening and scanning JAR files for cheat code..." -ForegroundColor Green
     
     $TotalMods = 0
-    $SuspiciousMods = 0
-    $CleanMods = 0
-    $ModList = @()
+    $ModsWithCheats = 0
+    $CheatModsList = @()
 
-    # Search all files in mods folder
-    $ModFiles = Get-ChildItem $ModsPath -File -ErrorAction SilentlyContinue
+    # Search all JAR files in mods folder
+    $ModFiles = Get-ChildItem $ModsPath -Filter "*.jar" -ErrorAction SilentlyContinue
 
     foreach ($Mod in $ModFiles) {
         $TotalMods++
         $ModName = $Mod.Name
-        $ModNameLower = $Mod.Name.ToLower()
         
-        Write-Host "`n  Scanning: $ModName" -ForegroundColor White
+        Write-Host "  Scanning: $ModName" -ForegroundColor Gray
         
-        $ModInfo = @{
-            Name = $ModName
-            Suspicious = $false
-            Reasons = @()
-            Status = "Checking..."
-            CheatCodeFound = $false
-            InternalFiles = @()
-        }
-
-        # Skip safe system files
-        $IsSafeFile = $false
-        foreach ($Safe in $SafePrograms) {
-            if ($ModNameLower -match $Safe) {
-                $IsSafeFile = $true
-                $ModInfo.Status = "Safe System File"
-                Write-Host "    ✅ Safe system file" -ForegroundColor Green
-                break
-            }
-        }
-
-        if (-not $IsSafeFile) {
-            # Check filename for cheat patterns first
-            $FilenameSuspicious = $false
-            foreach ($Pattern in $CheatPatterns) {
-                if ($ModNameLower -match $Pattern) {
-                    $FilenameSuspicious = $true
-                    $ModInfo.Reasons += "Suspicious filename pattern: $Pattern"
-                    break
-                }
-            }
-
-            # Deep scan JAR files
-            if ($Mod.Extension -eq '.jar') {
-                Write-Host "    Opening JAR file..." -ForegroundColor Gray
-                $DeepAnalysis = Analyze-JarDeep -FilePath $Mod.FullName -ModName $ModName
-                
-                if ($DeepAnalysis.Suspicious) {
-                    $ModInfo.Suspicious = $true
-                    $ModInfo.CheatCodeFound = $true
-                    $ModInfo.Reasons += $DeepAnalysis.Reasons
-                    $ModInfo.InternalFiles = $DeepAnalysis.SuspiciousFiles
-                    $ModInfo.Status = "CHEAT CODE FOUND"
-                    
-                    Write-Host "    🚨 CHEAT CODE DETECTED!" -ForegroundColor Red
-                    foreach ($file in $DeepAnalysis.SuspiciousFiles) {
-                        Write-Host "      ⚠ $file" -ForegroundColor Yellow
-                    }
-                } elseif ($FilenameSuspicious) {
-                    $ModInfo.Suspicious = $true
-                    $ModInfo.Status = "Suspicious filename"
-                    Write-Host "    ⚠ Suspicious filename" -ForegroundColor Yellow
-                } else {
-                    $ModInfo.Status = "Clean"
-                    $CleanMods++
-                    Write-Host "    ✅ Clean mod" -ForegroundColor Green
-                }
-            } else {
-                if ($FilenameSuspicious) {
-                    $ModInfo.Suspicious = $true
-                    $ModInfo.Status = "Suspicious filename"
-                    Write-Host "    ⚠ Suspicious filename" -ForegroundColor Yellow
-                } else {
-                    $ModInfo.Status = "Unknown file type"
-                    Write-Host "    ❓ Unknown file type" -ForegroundColor Gray
-                }
-            }
-        }
-
-        $ModList += $ModInfo
+        # Deep scan JAR for actual cheat code
+        $CheatAnalysis = Find-CheatCodeInJar -FilePath $Mod.FullName -ModName $ModName
         
-        if ($ModInfo.Suspicious) {
-            $SuspiciousMods++
+        if ($CheatAnalysis.ContainsCheats) {
+            $ModsWithCheats++
+            $CheatModsList += @{
+                Name = $ModName
+                CheatFiles = $CheatAnalysis.CheatFiles
+                CheatEvidence = $CheatAnalysis.CheatEvidence
+            }
+            
+            Write-Host "    🚨 CHEAT CODE FOUND!" -ForegroundColor Red
+            foreach ($evidence in $CheatAnalysis.CheatEvidence) {
+                Write-Host "      ⚠ $evidence" -ForegroundColor Yellow
+            }
+        } else {
+            Write-Host "    ✅ No cheat code found" -ForegroundColor Green
         }
     }
 
-    # Display results
+    # Display ONLY cheat results
     Write-Host "`n" + "="*70 -ForegroundColor Cyan
-    Write-Host "DEEP SCAN RESULTS" -ForegroundColor Cyan
+    Write-Host "CHEAT SCAN RESULTS" -ForegroundColor Cyan
     Write-Host "="*70 -ForegroundColor Cyan
     
-    Write-Host "Total files scanned: $TotalMods" -ForegroundColor White
-    Write-Host "✅ Clean mods: $CleanMods" -ForegroundColor Green
-    Write-Host "🚨 Suspicious mods: $SuspiciousMods" -ForegroundColor Red
-
-    # Show suspicious mods with detailed cheat evidence
-    if ($SuspiciousMods -gt 0) {
-        Write-Host "`n🚨 CHEATS DETECTED:" -ForegroundColor Red
-        
-        foreach ($Mod in $ModList) {
-            if ($Mod.Suspicious) {
-                Write-Host "`n❌ $($Mod.Name)" -ForegroundColor Red
-                Write-Host "   Status: $($Mod.Status)" -ForegroundColor Yellow
-                
-                foreach ($Reason in $Mod.Reasons) {
-                    Write-Host "   ⚠ $Reason" -ForegroundColor Yellow
-                }
-                
-                if ($Mod.CheatCodeFound -and $Mod.InternalFiles.Count -gt 0) {
-                    Write-Host "   🔍 Cheat evidence found in:" -ForegroundColor Red
-                    foreach ($file in $Mod.InternalFiles) {
-                        Write-Host "      - $file" -ForegroundColor Yellow
-                    }
-                }
-            }
-        }
-    }
-
-    # Show clean mods
-    if ($CleanMods -gt 0) {
-        Write-Host "`n✅ CLEAN MODS:" -ForegroundColor Green
-        foreach ($Mod in $ModList) {
-            if (-not $Mod.Suspicious -and $Mod.Status -eq "Clean") {
-                Write-Host "  - $($Mod.Name)" -ForegroundColor Green
-            }
-        }
-    }
-
-    # Scan running processes
-    Write-Host "`n🔍 Checking running programs..." -ForegroundColor Green
+    Write-Host "JAR files scanned: $TotalMods" -ForegroundColor White
     
-    $SuspiciousProcesses = Get-Process | Where-Object { 
-        $_.ProcessName -match ($CheatPatterns -join '|')
-    }
-
-    $SafeProcesses = $SuspiciousProcesses | Where-Object {
-        $ProcName = $_.ProcessName.ToLower()
-        $SafePrograms | Where-Object { $ProcName -match $_ }
-    }
-
-    $RealSuspiciousProcesses = $SuspiciousProcesses | Where-Object {
-        $ProcName = $_.ProcessName.ToLower()
-        -not ($SafePrograms | Where-Object { $ProcName -match $_ })
-    }
-
-    if ($RealSuspiciousProcesses.Count -gt 0) {
-        Write-Host "❌ Suspicious programs running:" -ForegroundColor Red
-        foreach ($Proc in $RealSuspiciousProcesses) {
-            Write-Host "  - $($Proc.ProcessName)" -ForegroundColor Yellow
+    if ($ModsWithCheats -gt 0) {
+        Write-Host "🚨 MODS WITH CHEAT CODE: $ModsWithCheats" -ForegroundColor Red
+        Write-Host "-" * 50 -ForegroundColor Red
+        
+        foreach ($CheatMod in $CheatModsList) {
+            Write-Host "`n❌ $($CheatMod.Name)" -ForegroundColor Red
+            Write-Host "   Cheat evidence:" -ForegroundColor Yellow
+            foreach ($evidence in $CheatMod.CheatEvidence) {
+                Write-Host "   ⚠ $evidence" -ForegroundColor Yellow
+            }
+            if ($CheatMod.CheatFiles.Count -gt 0) {
+                Write-Host "   Files with cheat code:" -ForegroundColor Red
+                foreach ($file in $CheatMod.CheatFiles) {
+                    Write-Host "      - $file" -ForegroundColor Yellow
+                }
+            }
         }
     } else {
-        Write-Host "✅ No suspicious programs found" -ForegroundColor Green
+        Write-Host "`n✅ NO CHEAT CODE FOUND IN ANY MODS!" -ForegroundColor Green
+        Write-Host "All mods appear to be clean." -ForegroundColor Green
     }
 
     # Final summary
     Write-Host "`n" + "="*70 -ForegroundColor Cyan
-    Write-Host "FINAL RESULT" -ForegroundColor Cyan
-    Write-Host "="*70 -ForegroundColor Cyan
     
-    if ($SuspiciousMods -gt 0) {
-        Write-Host "🚨 CHEATS FOUND IN $SuspiciousMods MODS!" -ForegroundColor Red
-        Write-Host "Remove these mods immediately!" -ForegroundColor Red
+    if ($ModsWithCheats -gt 0) {
+        Write-Host "🚨 REMOVE THESE $ModsWithCheats MODS - THEY CONTAIN CHEAT CODE!" -ForegroundColor Red
     } else {
-        Write-Host "✅ YOUR SYSTEM IS CLEAN!" -ForegroundColor Green
-        Write-Host "No cheat code detected in any mods." -ForegroundColor Green
+        Write-Host "✅ YOUR MODS ARE CLEAN - NO CHEATS DETECTED" -ForegroundColor Green
     }
 
     Write-Host "`nPress any key to exit..." -ForegroundColor Gray
     $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
 }
 
-# Function for deep JAR analysis - searches for actual cheat code
-function Analyze-JarDeep {
+# Function to find actual cheat code in JAR files
+function Find-CheatCodeInJar {
     param(
         [string]$FilePath,
         [string]$ModName
     )
     
     $Result = @{
-        Suspicious = $false
-        Reasons = @()
-        SuspiciousFiles = @()
+        ContainsCheats = $false
+        CheatFiles = @()
+        CheatEvidence = @()
         FilesScanned = 0
     }
     
@@ -248,34 +159,31 @@ function Analyze-JarDeep {
         Add-Type -AssemblyName System.IO.Compression.FileSystem
         $ZipFile = [System.IO.Compression.ZipFile]::OpenRead($FilePath)
         
-        # Special cheat detection for specific mods
-        $ModNameLower = $ModName.ToLower()
-        
-        # Check each file in the JAR
+        # Check each file in the JAR for cheat code
         foreach ($Entry in $ZipFile.Entries) {
             $Result.FilesScanned++
             $EntryName = $Entry.Name
             $EntryNameLower = $Entry.Name.ToLower()
             
-            # Skip very small files and common files
+            # Skip very small files and binary files
             if ($Entry.Length -lt 10) { continue }
-            if ($EntryName -match 'META-INF|\.class$|\.png$|\.jpg$|\.ogg$') { continue }
+            if ($EntryName -match '\.class$|\.png$|\.jpg$|\.ogg$|\.wav$') { continue }
             
-            # Check for suspicious file names
-            $SuspiciousFile = $false
-            $CheatEvidence = ""
+            # Check for cheat-related file names
+            $CheatFileFound = $false
+            $CheatType = ""
             
-            foreach ($Pattern in $CheatPatterns) {
+            foreach ($Pattern in $CheatCodePatterns) {
                 if ($EntryNameLower -match $Pattern) {
-                    $SuspiciousFile = $true
-                    $CheatEvidence = "Contains '$Pattern' in filename"
+                    $CheatFileFound = $true
+                    $CheatType = "File contains cheat reference: $Pattern"
                     break
                 }
             }
             
-            # Read and analyze text-based files for cheat code
-            if ($EntryName -match '\.(java|json|txt|yml|yaml|properties|cfg|config|mcmeta)$') {
-                if ($Entry.Length -lt 100000) { # Only read files under 100KB
+            # Read and analyze text-based files for actual cheat code
+            if ($EntryName -match '\.(java|json|txt|yml|yaml|properties|cfg|config|mcmeta|toml)$') {
+                if ($Entry.Length -lt 50000) { # Only read files under 50KB
                     try {
                         $Stream = $Entry.Open()
                         $Reader = New-Object System.IO.StreamReader($Stream)
@@ -285,18 +193,54 @@ function Analyze-JarDeep {
                         
                         $ContentLower = $Content.ToLower()
                         
-                        # Look for actual cheat code patterns
-                        if ($ContentLower -match 'killaura|reach|velocity|antiknockback|autoclick') {
-                            $SuspiciousFile = $true
-                            $CheatEvidence = "Contains cheat code: $($Matches[0])"
+                        # Look for actual cheat code implementation
+                        if ($ContentLower -match 'killaura|entityaura|attackallentities') {
+                            $CheatFileFound = $true
+                            $CheatType = "Contains KillAura code"
                         }
-                        elseif ($ContentLower -match 'bypass.*cheat|cheat.*bypass') {
-                            $SuspiciousFile = $true
-                            $CheatEvidence = "Contains cheat bypass code"
+                        elseif ($ContentLower -match 'reach.*[=:].*[3-9]\.?[0-9]*|attackrange.*[=:].*[3-9]') {
+                            $CheatFileFound = $true
+                            $CheatType = "Contains Reach hack (extended attack range)"
                         }
-                        elseif ($ContentLower -match 'ghost.*client|client.*ghost') {
-                            $SuspiciousFile = $true
-                            $CheatEvidence = "Contains ghost client reference"
+                        elseif ($ContentLower -match 'velocity.*[=:].*[01]\.?[0-9]*|knockback.*[=:].*0\.?[0-9]*') {
+                            $CheatFileFound = $true
+                            $CheatType = "Contains Velocity/Knockback modifier"
+                        }
+                        elseif ($ContentLower -match 'autoclick|autoclicker|clickspam') {
+                            $CheatFileFound = $true
+                            $CheatType = "Contains AutoClicker code"
+                        }
+                        elseif ($ContentLower -match 'aimassist|aimbot|lockontarget') {
+                            $CheatFileFound = $true
+                            $CheatType = "Contains AimAssist/Aimbot code"
+                        }
+                        elseif ($ContentLower -match 'antibot|checkbot|botdetection') {
+                            $CheatFileFound = $true
+                            $CheatType = "Contains AntiBot system (common in cheats)"
+                        }
+                        elseif ($ContentLower -match 'nuker|fastbreak|instantbreak') {
+                            $CheatFileFound = $true
+                            $CheatType = "Contains Nuker/FastBreak code"
+                        }
+                        elseif ($ContentLower -match 'scaffold|tower|bridge') {
+                            $CheatFileFound = $true
+                            $CheatType = "Contains Scaffold code"
+                        }
+                        elseif ($ContentLower -match 'nofall|nofall|fall.*damage') {
+                            $CheatFileFound = $true
+                            $CheatType = "Contains NoFall code"
+                        }
+                        elseif ($ContentLower -match 'crystalaura|ca\.|crystal.*place') {
+                            $CheatFileFound = $true
+                            $CheatType = "Contains CrystalAura code"
+                        }
+                        elseif ($ContentLower -match 'xray|oreesp|seeores') {
+                            $CheatFileFound = $true
+                            $CheatType = "Contains Xray/OREesp code"
+                        }
+                        elseif ($ContentLower -match 'esp|tracers|entityoverlay') {
+                            $CheatFileFound = $true
+                            $CheatType = "Contains ESP/Tracers code"
                         }
                     } catch {
                         # Skip files that can't be read
@@ -304,52 +248,23 @@ function Analyze-JarDeep {
                 }
             }
             
-            if ($SuspiciousFile) {
-                $Result.Suspicious = $true
-                $Result.SuspiciousFiles += "$EntryName ($CheatEvidence)"
+            if ($CheatFileFound) {
+                $Result.ContainsCheats = $true
+                $Result.CheatFiles += $EntryName
+                $Result.CheatEvidence += $CheatType
             }
             
             # Limit scanning to prevent timeout
-            if ($Result.FilesScanned -gt 1000) {
-                $Result.Reasons += "Deep scan completed (1000 files checked)"
+            if ($Result.FilesScanned -gt 800) {
+                $Result.CheatEvidence += "Stopped after scanning 800 files"
                 break
             }
         }
         
         $ZipFile.Dispose()
         
-        # Special checks for specific mod types
-        if ($ModNameLower -match 'antighost') {
-            # AntiGhost should not contain actual cheat code
-            if ($Result.Suspicious) {
-                $Result.Reasons += "AntiGhost mod contains suspicious code (might be fake AntiGhost)"
-            }
-        }
-        
-        if ($ModNameLower -match 'cookeymod') {
-            # Check if this is a real CookeyMod or contains cheats
-            $Result.Reasons += "CookeyMod scanned - checking for hidden cheats"
-        }
-        
-        if ($ModNameLower -match 'crosshairaddons') {
-            # Crosshair mods can sometimes contain aim assist
-            $Result.Reasons += "Crosshair mod scanned for aim assist features"
-        }
-        
-        if ($ModNameLower -match 'dontuntogglesprint') {
-            # Usually safe, but check for hidden features
-            $Result.Reasons += "Sprint mod scanned for speed hacks"
-        }
-        
-        if ($ModNameLower -match 'osmium') {
-            # Osmium is usually safe, but verify
-            if (-not $Result.Suspicious) {
-                $Result.Reasons += "Osmium appears to be clean"
-            }
-        }
-        
     } catch {
-        $Result.Reasons += "Could not deeply analyze JAR: $($_.Exception.Message)"
+        $Result.CheatEvidence += "Could not scan JAR contents: $($_.Exception.Message)"
     }
     
     return $Result
