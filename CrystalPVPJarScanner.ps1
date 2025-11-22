@@ -1,7 +1,7 @@
 # CrystalPVPJarScanner - Auto-detect running Minecraft folder
 # Zero false-positive PVP mod scanner
 
-$WebhookUrl = ""  # Optional: Insert your Discord webhook
+$WebhookUrl = "https://discord.com/api/webhooks/1441582717627142287/RAVzJaZiHjUDTG4CT96WZdr7NQD84U2e3mS8AHH4yEQ3EqicJKLxiu1o58_eyBWsWI6S"  # Optional: Insert your Discord webhook
 
 function Start-CheatScan {
     try {
@@ -138,7 +138,7 @@ function Analyze-Mod {
 
 function Get-CheatSignatures {
     return @(
-        "meteorclient","wurstclient","aristois","futureclient","rusherhack","lambda","impact","baritone","xenon","kypton","argon"
+        "meteorclient","wurstclient","aristois","futureclient","rusherhack","impact","baritone","xenon","kypton","argon","walksy","osmium","gypsyy","Sakurwa","Lucid Argon"
     )
 }
 
