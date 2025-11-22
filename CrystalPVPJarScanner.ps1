@@ -151,7 +151,7 @@ function Get-CheatSignatures {
         "argon",
         "Argon",
         "Grim",
-        "grim",
+        "grim"
         
         # Only mark baritone if standalone client
     )
