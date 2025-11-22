@@ -9,8 +9,7 @@ function Start-CheatScan {
     # Standard paths
     $pathsToCheck = @(
         "$env:APPDATA\.minecraft",
-        "$env:USERPROFILE\AppData\Roaming\.minecraft",
-        "$env:LOCALAPPDATA\Packages\Microsoft.MinecraftUWP_8wekyb3d8bbwe\LocalState\games\com.mojang"
+        "$env:USERPROFILE\AppData\Roaming\.minecraft"
     )
     
     # Modrinth profiles
@@ -41,7 +40,6 @@ function Start-CheatScan {
     else {
         Write-Host "`n📁 Multiple Minecraft folders found:" -ForegroundColor Yellow
         for ($i = 0; $i -lt $DetectedPaths.Count; $i++) {
-            $profileName = Split-Path $DetectedPaths[$i] -Leaf
             Write-Host "  $($i+1). $($DetectedPaths[$i])" -ForegroundColor Gray
         }
         $choice = Read-Host "`nSelect folder (1-$($DetectedPaths.Count))"
@@ -66,10 +64,7 @@ function Start-CheatScan {
     $KnownCheatMods = @(
         "osmium", "elytraboost", "cwe", "crystaloptimizer",
         "heroanchor", "anchoroptimizer", "ias", "interactivespeed", 
-        "cookeymod", "reflex", "vulcan", "verus", "cwb",
-        "future", "wurst", "aristois", "meteor", "bleach",
-        "inertia", "lambda", "rusherhack", "pyro", "kami",
-        "konas", "phobos", "w+", "wolfram", "gamesense"
+        "cookeymod", "reflex", "vulcan", "verus", "cwb"
     )
 
     $ModsPath = "$MinecraftPath\mods"
