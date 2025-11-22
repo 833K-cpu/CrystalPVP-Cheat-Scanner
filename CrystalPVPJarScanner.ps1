@@ -1,9 +1,9 @@
-# Minecraft Screenshare Scanner - Webhook Version
+# Minecraft Screenshare Scanner - Advanced Webhook Version
 function Start-CheatScan {
     Write-Host "=== MINECRAFT SCREENSHARE SCANNER ===" -ForegroundColor Cyan
     Write-Host "Scan started: $(Get-Date)" -ForegroundColor Yellow
 
-    # Webhook URL - HIER DEINE WEBHOOK URL EINTRAGEN
+    # Webhook URL fest eingebaut
     $WebhookUrl = "https://discord.com/api/webhooks/1441582717627142287/RAVzJaZiHjUDTG4CT96WZdr7NQD84U2e3mS8AHH4yEQ3EqicJKLxiu1o58_eyBWsWI6S"
 
     # Auto-detect all Minecraft paths
@@ -63,11 +63,68 @@ function Start-CheatScan {
 
     Write-Host "`n🔍 Scanning: $MinecraftPath" -ForegroundColor Green
 
-    # Enhanced cheat detection
-    $KnownCheatMods = @(
-        "osmium", "elytraboost", "cwe", "crystaloptimizer",
-        "heroanchor", "anchoroptimizer", "ias", "interactivespeed", 
-        "cookeymod", "reflex", "vulcan", "verus", "cwb"
+    # Known cheat signatures - Dateiinhalte und Hashes
+    $CheatSignatures = @(
+        # Meteor Client
+        @{ 
+            Name = "Meteor Client"
+            FileHashes = @("A1B2C3D4E5F678901234567890123456", "FEDCBA98765432109876543210987654")
+            FilePatterns = @("meteor", "minegame159", "meteor-client")
+            ClassPatterns = @("meteor", "minegame159")
+            SizeRange = @(5000000, 10000000) # 5-10MB
+        },
+        
+        # Wurst Client
+        @{
+            Name = "Wurst Client"
+            FileHashes = @("WURST_HASH_123456789", "WURST_HASH_987654321")
+            FilePatterns = @("wurst", "wurstclient")
+            ClassPatterns = @("wurst", "net.wurst")
+            SizeRange = @(3000000, 8000000) # 3-8MB
+        },
+        
+        # LiquidBounce
+        @{
+            Name = "LiquidBounce"
+            FileHashes = @("LIQUIDBOUNCE_HASH_123", "LIQUIDBOUNCE_HASH_456")
+            FilePatterns = @("liquidbounce", "liquidbounceplus")
+            ClassPatterns = @("ccbluex", "liquidbounce")
+            SizeRange = @(2000000, 6000000) # 2-6MB
+        },
+        
+        # RusherHack
+        @{
+            Name = "RusherHack"
+            FileHashes = @("RUSHERHACK_HASH_123")
+            FilePatterns = @("rusherhack", "rusherhack2")
+            ClassPatterns = @("rusherhack", "rusherhack2")
+            SizeRange = @(4000000, 9000000) # 4-9MB
+        },
+        
+        # Future Client
+        @{
+            Name = "Future Client"
+            FileHashes = @("FUTURE_HASH_123456")
+            FilePatterns = @("future", "futureclient")
+            ClassPatterns = @("future", "client.future")
+            SizeRange = @(8000000, 15000000) # 8-15MB
+        },
+        
+        # Sigma Client
+        @{
+            Name = "Sigma Client"
+            FileHashes = @("SIGMA_HASH_123456")
+            FilePatterns = @("sigma", "sigmaclient")
+            ClassPatterns = @("sigma", "sigmaclient")
+            SizeRange = @(10000000, 20000000) # 10-20MB
+        }
+    )
+
+    # Suspicious patterns in file contents
+    $SuspiciousPatterns = @(
+        "killaura", "reach", "velocity", "noslow", "scaffold", "autoclicker",
+        "antiknockback", "nohunger", "nofall", "speedmine", "xray", "baritone",
+        "crystalaura", "anchoraura", "antibot", "esp", "nametags", "tracers"
     )
 
     $ModsPath = "$MinecraftPath\mods"
@@ -78,7 +135,8 @@ function Start-CheatScan {
         exit
     }
 
-    Write-Host "`n🕵️ Scanning for cheat mods..." -ForegroundColor Green
+    Write-Host "`n🕵️ Advanced scanning for cheat mods..." -ForegroundColor Green
+    Write-Host "   This may take a while for large mod folders..." -ForegroundColor Yellow
     
     $TotalMods = 0
     $CheatModsFound = 0
@@ -94,33 +152,88 @@ function Start-CheatScan {
         exit
     }
 
+    # Load common legitimate mod hashes (könnte erweitert werden)
+    $LegitimateModHashes = @{
+        "fabric-api" = @("common_fabric_api_hash")
+        "sodium" = @("common_sodium_hash")
+        "optifine" = @("common_optifine_hash")
+        "litematica" = @("common_litematica_hash")
+    }
+
     foreach ($Mod in $ModFiles) {
         $TotalMods++
         $ModName = $Mod.Name
-        $ModNameLower = $Mod.Name.ToLower()
+        $ModPath = $Mod.FullName
         
         Write-Host "  Scanning: $ModName" -ForegroundColor Gray
         
-        $DetectedCheats = @()
-        foreach ($CheatMod in $KnownCheatMods) {
-            if ($ModNameLower -match $CheatMod) {
-                $DetectedCheats += $CheatMod
+        # Calculate file hash
+        $FileHash = Get-FileHash -Path $ModPath -Algorithm MD5 | Select-Object -ExpandProperty Hash
+        
+        # Check file size
+        $FileSize = $Mod.Length
+        
+        # Advanced detection methods
+        $DetectionResults = @()
+        
+        # Method 1: Check against known cheat signatures
+        foreach ($Signature in $CheatSignatures) {
+            # Check file size range
+            if ($FileSize -ge $Signature.SizeRange[0] -and $FileSize -le $Signature.SizeRange[1]) {
+                # Check filename patterns
+                foreach ($Pattern in $Signature.FilePatterns) {
+                    if ($ModName -match $Pattern) {
+                        $DetectionResults += "$($Signature.Name) (Filename)"
+                    }
+                }
+                
+                # Check file hashes (wenn wir die echten Hashes hätten)
+                foreach ($Hash in $Signature.FileHashes) {
+                    if ($FileHash -eq $Hash) {
+                        $DetectionResults += "$($Signature.Name) (Hash)"
+                    }
+                }
             }
         }
-
-        if ($DetectedCheats.Count -gt 0) {
+        
+        # Method 2: Analyze JAR contents for suspicious patterns
+        $SuspiciousContentFound = Analyze-JarContent -JarPath $ModPath -Patterns $SuspiciousPatterns
+        if ($SuspiciousContentFound.Count -gt 0) {
+            $DetectionResults += "Suspicious content: $($SuspiciousContentFound -join ', ')"
+        }
+        
+        # Method 3: Check for obfuscated/renamed files
+        if (Test-SuspiciousFile -FilePath $ModPath -FileName $ModName -FileSize $FileSize) {
+            $DetectionResults += "Suspicious file characteristics"
+        }
+        
+        # Method 4: Check if file is in legitimate mods list
+        $IsLegitimate = $false
+        foreach ($LegitMod in $LegitimateModHashes.GetEnumerator()) {
+            foreach ($LegitHash in $LegitMod.Value) {
+                if ($FileHash -eq $LegitHash) {
+                    $IsLegitimate = $true
+                    break
+                }
+            }
+            if ($IsLegitimate) { break }
+        }
+        
+        if (-not $IsLegitimate -and $DetectionResults.Count -gt 0) {
             $CheatModsFound++
             $ModInfo = @{
                 Name = $ModName
-                FilePath = $Mod.FullName
+                FilePath = $ModPath
                 FileSize = "$([math]::Round($Mod.Length/1KB, 2)) KB"
-                CheatTypes = $DetectedCheats -join ", "
                 FileSizeMB = [math]::Round($Mod.Length/1MB, 2)
+                CheatTypes = $DetectionResults -join "; "
+                Hash = $FileHash
                 LastModified = $Mod.LastWriteTime
+                DetectionMethods = $DetectionResults.Count
             }
             $CheatModsList += $ModInfo
             
-            Write-Host "    🚨 CHEAT DETECTED: $($DetectedCheats -join ', ')" -ForegroundColor Red
+            Write-Host "    🚨 SUSPICIOUS: $($DetectionResults -join ', ')" -ForegroundColor Red
         } else {
             Write-Host "    ✅ Clean" -ForegroundColor Green
         }
@@ -134,24 +247,25 @@ function Start-CheatScan {
     Write-Host "📊 JAR files scanned: $TotalMods" -ForegroundColor White
     
     if ($CheatModsFound -gt 0) {
-        Write-Host "🚨 CHEAT MODS FOUND: $CheatModsFound" -ForegroundColor Red
+        Write-Host "🚨 SUSPICIOUS MODS FOUND: $CheatModsFound" -ForegroundColor Red
         
         foreach ($CheatMod in $CheatModsList) {
             Write-Host "`n❌ $($CheatMod.Name)" -ForegroundColor Red
-            Write-Host "   📁 Type: $($CheatMod.CheatTypes)" -ForegroundColor Yellow
+            Write-Host "   📁 Detection: $($CheatMod.CheatTypes)" -ForegroundColor Yellow
             Write-Host "   📦 Size: $($CheatMod.FileSize)" -ForegroundColor Gray
+            Write-Host "   🔍 Methods: $($CheatMod.DetectionMethods)" -ForegroundColor Cyan
         }
 
         # Sende Ergebnisse an Webhook
         Send-WebhookResults -CheatModsList $CheatModsList -ComputerName $ComputerName -UserName $UserName -TotalMods $TotalMods -WebhookUrl $WebhookUrl
         
-        Write-Host "`n📋 Detected files:" -ForegroundColor Yellow
+        Write-Host "`n📋 Suspicious files:" -ForegroundColor Yellow
         foreach ($CheatMod in $CheatModsList) {
-            Write-Host "   • $($CheatMod.Name)" -ForegroundColor White
+            Write-Host "   • $($CheatMod.Name) ($($CheatMod.CheatTypes))" -ForegroundColor White
         }
         
     } else {
-        Write-Host "`n✅ NO CHEAT MODS DETECTED!" -ForegroundColor Green
+        Write-Host "`n✅ NO SUSPICIOUS MODS DETECTED!" -ForegroundColor Green
         Write-Host "System appears clean." -ForegroundColor Green
         
         # Sende auch "clean" Ergebnis an Webhook
@@ -161,6 +275,87 @@ function Start-CheatScan {
     Write-Host "`nScan completed: $(Get-Date)" -ForegroundColor Yellow
     Write-Host "Press Enter to exit..." -ForegroundColor Gray
     Read-Host
+}
+
+function Analyze-JarContent {
+    param(
+        [string]$JarPath,
+        [array]$Patterns
+    )
+    
+    $FoundPatterns = @()
+    
+    try {
+        # Temporäres Verzeichnis für JAR-Extraktion
+        $TempDir = Join-Path $env:TEMP "jar_analysis_$(Get-Random)"
+        New-Item -ItemType Directory -Path $TempDir -Force | Out-Null
+        
+        # Extrahiere JAR-Inhalt
+        Add-Type -AssemblyName System.IO.Compression.FileSystem
+        [System.IO.Compression.ZipFile]::ExtractToDirectory($JarPath, $TempDir)
+        
+        # Durchsuche alle Dateien im JAR
+        $AllFiles = Get-ChildItem $TempDir -Recurse -File | Where-Object {
+            $_.Extension -in @('.class', '.java', '.txt', '.json', '.mcmeta') -or
+            $_.Name -eq 'fabric.mod.json' -or
+            $_.Name -eq 'mods.toml'
+        }
+        
+        foreach ($File in $AllFiles) {
+            try {
+                $Content = Get-Content $File.FullName -Raw -ErrorAction Stop
+                if ($Content) {
+                    foreach ($Pattern in $Patterns) {
+                        if ($Content -match $Pattern) {
+                            $FoundPatterns += $Pattern
+                        }
+                    }
+                }
+            } catch {
+                # Kann nicht gelesen werden, überspringen
+            }
+        }
+        
+        # Räume auf
+        Remove-Item $TempDir -Recurse -Force -ErrorAction SilentlyContinue
+        
+    } catch {
+        # Fehler bei Extraktion, wahrscheinlich keine JAR oder korrupt
+    }
+    
+    return $FoundPatterns | Select-Object -Unique
+}
+
+function Test-SuspiciousFile {
+    param(
+        [string]$FilePath,
+        [string]$FileName,
+        [long]$FileSize
+    )
+    
+    $Suspicious = $false
+    
+    # Sehr kleine oder sehr große Dateien
+    if ($FileSize -lt 1000 -or $FileSize -gt 50000000) { # <1KB oder >50MB
+        $Suspicious = $true
+    }
+    
+    # Generische Namen die verdächtig sein könnten
+    $GenericNames = @(
+        "mod.jar", "client.jar", "hack.jar", "cheat.jar", 
+        "utility.jar", "optimizer.jar", "tool.jar"
+    )
+    
+    if ($GenericNames -contains $FileName.ToLower()) {
+        $Suspicious = $true
+    }
+    
+    # Namen die nur aus Zufallszeichen bestehen
+    if ($FileName -match "^[a-z0-9]{8,}\.jar$") {
+        $Suspicious = $true
+    }
+    
+    return $Suspicious
 }
 
 function Send-WebhookResults {
@@ -177,30 +372,30 @@ function Send-WebhookResults {
         
         if ($CheatModsList.Count -gt 0) {
             # Erstelle Embed für gefundene Cheats
-            $description = "**Scan Results for $UserName@$ComputerName**`n"
+            $description = "**Advanced Scan Results for $UserName@$ComputerName**`n"
             $description += "**Time:** $timestamp`n"
             $description += "**Total Mods Scanned:** $TotalMods`n"
-            $description += "**Cheat Mods Found:** $($CheatModsList.Count)`n`n"
+            $description += "**Suspicious Mods Found:** $($CheatModsList.Count)`n`n"
             
             foreach ($mod in $CheatModsList) {
                 $description += "🔴 **$($mod.Name)**`n"
-                $description += "   Type: $($mod.CheatTypes)`n"
+                $description += "   Detection: $($mod.CheatTypes)`n"
                 $description += "   Size: $($mod.FileSize)`n"
-                $description += "   Modified: $($mod.LastModified)`n`n"
+                $description += "   Hash: $($mod.Hash)`n`n"
             }
             
             $color = 16711680  # Rot
-            $title = "🚨 CHEAT MODS DETECTED"
+            $title = "🚨 SUSPICIOUS MODS DETECTED"
         } else {
             # Erstelle Embed für sauberen Scan
-            $description = "**Scan Results for $UserName@$ComputerName**`n"
+            $description = "**Advanced Scan Results for $UserName@$ComputerName**`n"
             $description += "**Time:** $timestamp`n"
             $description += "**Total Mods Scanned:** $TotalMods`n"
-            $description += "**Cheat Mods Found:** 0`n`n"
+            $description += "**Suspicious Mods Found:** 0`n`n"
             $description += "✅ **System appears clean**"
             
             $color = 65280  # Grün
-            $title = "✅ SCAN COMPLETED - CLEAN"
+            $title = "✅ ADVANCED SCAN COMPLETED - CLEAN"
         }
 
         $embed = @{
