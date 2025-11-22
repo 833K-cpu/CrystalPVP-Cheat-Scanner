@@ -1,17 +1,17 @@
-# Minecraft Cheat Scanner - Sends results to Discord Bot
+# Minecraft Cheat Scanner - Improved Version
 
 function Start-CheatScan {
     Write-Host "=== Minecraft Cheat Scanner ===" -ForegroundColor Cyan
     Write-Host "Scan started: $(Get-Date)" -ForegroundColor Yellow
 
-    # Try to find Minecraft path automatically
+    # Auto-detect common paths
     $DefaultPath = "$env:APPDATA\.minecraft"
-    $ModrinthPath = "$env:APPDATA\ModrinthApp\profiles"
+    $ModrinthBase = "$env:APPDATA\ModrinthApp\profiles"
     
     Write-Host "`nPlease enter your Minecraft folder path:" -ForegroundColor White
     Write-Host "Examples:" -ForegroundColor Gray
     Write-Host "  - Default: $DefaultPath" -ForegroundColor Gray
-    Write-Host "  - Modrinth: $ModrinthPath\YourProfile" -ForegroundColor Gray
+    Write-Host "  - Modrinth: $ModrinthBase\YourProfile" -ForegroundColor Gray
     Write-Host "  - Press Enter to use default path" -ForegroundColor Yellow
 
     $MinecraftPath = Read-Host "`nEnter path"
@@ -20,8 +20,11 @@ function Start-CheatScan {
         $MinecraftPath = $DefaultPath
     }
 
+    # Normalize path
+    $MinecraftPath = $MinecraftPath.Trim().Trim('"')
+
     if (-not (Test-Path $MinecraftPath)) {
-        Write-Host "ERROR: This path does not exist!" -ForegroundColor Red
+        Write-Host "ERROR: Path does not exist: $MinecraftPath" -ForegroundColor Red
         Write-Host "Please check the path and try again." -ForegroundColor Yellow
         Read-Host "Press Enter to exit"
         exit
@@ -29,18 +32,20 @@ function Start-CheatScan {
 
     Write-Host "`n✅ Scanning: $MinecraftPath" -ForegroundColor Green
 
-    # Known cheat mods
+    # Enhanced cheat mods list
     $KnownCheatMods = @(
         "osmium", "elytraboost", "cwe", "crystaloptimizer",
         "heroanchor", "anchoroptimizer", "ias", "interactivespeed", 
-        "cookeymod", "reflex", "vulcan", "verus", "cwb"
+        "cookeymod", "reflex", "vulcan", "verus", "cwb",
+        "future", "wurst", "aristois", "meteor", "bleach",
+        "inertia", "lambda", "rusherhack", "pyro", "kami"
     )
 
     $ModsPath = "$MinecraftPath\mods"
     
     if (-not (Test-Path $ModsPath)) {
-        Write-Host "❌ No 'mods' folder found!" -ForegroundColor Red
-        Write-Host "Make sure you entered the correct path." -ForegroundColor Yellow
+        Write-Host "❌ No 'mods' folder found at: $ModsPath" -ForegroundColor Red
+        Write-Host "Make sure you entered the correct Minecraft folder path." -ForegroundColor Yellow
         Read-Host "Press Enter to exit"
         exit
     }
@@ -68,28 +73,25 @@ function Start-CheatScan {
         
         Write-Host "  Scanning: $ModName" -ForegroundColor Gray
         
-        $IsKnownCheat = $false
-        $DetectedCheatType = ""
+        $DetectedCheats = @()
         foreach ($CheatMod in $KnownCheatMods) {
             if ($ModNameLower -match $CheatMod) {
-                $IsKnownCheat = $true
-                $DetectedCheatType = $CheatMod
-                break
+                $DetectedCheats += $CheatMod
             }
         }
 
-        if ($IsKnownCheat) {
+        if ($DetectedCheats.Count -gt 0) {
             $CheatModsFound++
             $ModInfo = @{
                 Name = $ModName
                 FilePath = $Mod.FullName
                 FileSize = "$([math]::Round($Mod.Length/1KB, 2)) KB"
-                CheatType = $DetectedCheatType
+                CheatTypes = $DetectedCheats -join ", "
                 FileSizeMB = [math]::Round($Mod.Length/1MB, 2)
             }
             $CheatModsList += $ModInfo
             
-            Write-Host "    🚨 CHEAT DETECTED: $DetectedCheatType" -ForegroundColor Red
+            Write-Host "    🚨 CHEAT DETECTED: $($DetectedCheats -join ', ')" -ForegroundColor Red
         } else {
             Write-Host "    ✅ Clean" -ForegroundColor Green
         }
@@ -107,7 +109,7 @@ function Start-CheatScan {
         
         foreach ($CheatMod in $CheatModsList) {
             Write-Host "`n❌ $($CheatMod.Name) ($($CheatMod.FileSize))" -ForegroundColor Red
-            Write-Host "   Type: $($CheatMod.CheatType)" -ForegroundColor Yellow
+            Write-Host "   Type: $($CheatMod.CheatTypes)" -ForegroundColor Yellow
         }
 
         # Send results to Discord Bot
@@ -116,6 +118,7 @@ function Start-CheatScan {
         
     } else {
         Write-Host "`n✅ NO CHEAT MODS DETECTED!" -ForegroundColor Green
+        Write-Host "Your Minecraft installation appears to be clean." -ForegroundColor Green
     }
 
     Write-Host "`nScan completed: $(Get-Date)" -ForegroundColor Yellow
@@ -135,7 +138,7 @@ function Send-ToDiscordBot {
     try {
         # Create detailed results message
         $FileList = $CheatModsList | ForEach-Object { 
-            "📎 `"$($_.Name)`" - **$($_.CheatType)** ($($_.FileSize))"
+            "📎 `"$($_.Name)`" - **$($_.CheatTypes)** ($($_.FileSize))"
         }
         
         $MessageContent = @"
@@ -152,7 +155,8 @@ function Send-ToDiscordBot {
 $($FileList -join "`n")
 
 **📍 Scan Path:** $MinecraftPath
-**⚡ Run `/scan $MinecraftPath` on the bot to download these files**
+**⚡ Use Discord command:**
+\`/scan $($MinecraftPath.Replace('\', '\\'))\`
 "@
 
         # Send to Discord via Webhook
@@ -167,7 +171,7 @@ $($FileList -join "`n")
         $Response = Invoke-RestMethod -Uri $WebhookURL -Method Post -Body $Body -ContentType "application/json" -ErrorAction Stop
         
         Write-Host "    ✅ Results sent to Discord Bot!" -ForegroundColor Green
-        Write-Host "    💡 Use '/scan $MinecraftPath' on the bot to download files" -ForegroundColor Cyan
+        Write-Host "    💡 Use the Discord command above to download files" -ForegroundColor Cyan
         
     } catch {
         Write-Host "    ❌ Failed to send to Discord: $($_.Exception.Message)" -ForegroundColor Red
