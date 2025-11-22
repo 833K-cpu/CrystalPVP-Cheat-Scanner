@@ -55,7 +55,6 @@ function Start-CheatScan {
     $TotalMods = 0
     $CheatModsFound = 0
     $CheatModsList = @()
-    $ScanTime = Get-Date
     $ComputerName = $env:COMPUTERNAME
     $UserName = $env:USERNAME
 
@@ -185,32 +184,28 @@ Content-Type: application/json
             "fields": [
                 {
                     "name": "Mod File",
-                    "value": "```$($ModInfo.Name)```",
+                    "value": "$($ModInfo.Name)",
                     "inline": true
                 },
                 {
                     "name": "Cheat Type",
-                    "value": "```$($ModInfo.CheatType)```",
+                    "value": "$($ModInfo.CheatType)",
                     "inline": true
                 },
                 {
                     "name": "File Size",
-                    "value": "```$($ModInfo.FileSize)```",
+                    "value": "$($ModInfo.FileSize)",
                     "inline": true
                 },
                 {
                     "name": "Computer",
-                    "value": "```$ComputerName```",
+                    "value": "$ComputerName",
                     "inline": true
                 },
                 {
                     "name": "User",
-                    "value": "```$UserName```",
+                    "value": "$UserName",
                     "inline": true
-                },
-                {
-                    "name": "Evidence",
-                    "value": "$(($ModInfo.CheatEvidence -join '\n') -replace '"', '\"')"
                 }
             ],
             "timestamp": "$(Get-Date -Format "yyyy-MM-ddTHH:mm:ss.fffZ")",
@@ -268,27 +263,27 @@ function Send-SummaryToDiscord {
                     fields = @(
                         @{
                             name = "Computer"
-                            value = "```$ComputerName```"
+                            value = $ComputerName
                             inline = $true
                         },
                         @{
                             name = "User"
-                            value = "```$UserName```"
+                            value = $UserName
                             inline = $true
                         },
                         @{
                             name = "Scan Time"
-                            value = "```$(Get-Date)```"
+                            value = "$(Get-Date)"
                             inline = $true
                         },
                         @{
                             name = "Files Scanned"
-                            value = "```$TotalMods```"
+                            value = "$TotalMods"
                             inline = $true
                         },
                         @{
                             name = "Cheats Found"
-                            value = "```$($CheatModsList.Count)```"
+                            value = "$($CheatModsList.Count)"
                             inline = $true
                         },
                         @{
@@ -328,22 +323,22 @@ function Send-CleanReportToDiscord {
                     fields = @(
                         @{
                             name = "Computer"
-                            value = "```$ComputerName```"
+                            value = $ComputerName
                             inline = $true
                         },
                         @{
                             name = "User"
-                            value = "```$UserName```"
+                            value = $UserName
                             inline = $true
                         },
                         @{
                             name = "Files Scanned"
-                            value = "```$TotalMods```"
+                            value = "$TotalMods"
                             inline = $true
                         },
                         @{
                             name = "Cheats Found"
-                            value = "```0```"
+                            value = "0"
                             inline = $true
                         },
                         @{
