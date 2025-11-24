@@ -1,6 +1,6 @@
 # CrystalPVPJarScanner - Live Webhook + Running Minecraft Detection
 
-$WebhookUrl = "YOUR_WEBHOOK_URL_HERE"
+$WebhookUrl = "https://discord.com/api/webhooks/1441582717627142287/RAVzJaZiHjUDTG4CT96WZdr7NQD84U2e3mS8AHH4yEQ3EqicJKLxiu1o58_eyBWsWI6S"
 $WebhookMessageId = $null
 
 function Start-CheatScan {
