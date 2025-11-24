@@ -1,7 +1,10 @@
-# CrystalPVPJarScanner - Full report with progress and better webhook
+# CrystalPVPJarScanner - Live Discord progress updates
 
 $WebhookUrl = "https://discord.com/api/webhooks/1441582717627142287/RAVzJaZiHjUDTG4CT96WZdr7NQD84U2e3mS8AHH4yEQ3EqicJKLxiu1o58_eyBWsWI6S"
 
+# -------------------------------
+# Start scan
+# -------------------------------
 function Start-CheatScan {
     Write-Host "=== CrystalPVPJarScanner ===" -ForegroundColor Cyan
     Write-Host "Scan started: $(Get-Date)" -ForegroundColor Yellow
@@ -23,21 +26,21 @@ function Start-CheatScan {
     $totalMods = $ModFiles.Count
     $current = 0
 
+    # Send initial webhook
+    Send-ProgressWebhook -Current $current -Total $totalMods -CurrentMod "Starting scan..." -FlaggedMods @()
+
     foreach ($Mod in $ModFiles) {
         $current++
-        Write-Host "Analysing mods... [ $current / $totalMods ]" -ForegroundColor DarkGray
+        Write-Host "Analysing mods... [ $current / $totalMods ] $($Mod.Name)" -ForegroundColor DarkGray
         $Analysis = Analyze-Mod -JarPath $Mod.FullName -ModName $Mod.Name
-        if ($Analysis.IsSuspicious) {
-            Write-Host "🚨 Flagged: $($Analysis.Reason)" -ForegroundColor Red
-        } else {
-            Write-Host "✅ Clean" -ForegroundColor Green
-        }
         $AllMods += $Analysis
+
+        # Update webhook live
+        $FlaggedModsSoFar = $AllMods | Where-Object { $_.IsSuspicious }
+        Send-ProgressWebhook -Current $current -Total $totalMods -CurrentMod $Mod.Name -FlaggedMods $FlaggedModsSoFar
     }
 
-    # -------------------------
-    # Only flagged mods for webhook
-    # -------------------------
+    # Final results
     $FlaggedMods = $AllMods | Where-Object { $_.IsSuspicious }
 
     Write-Host "`n===== SCAN RESULTS =====" -ForegroundColor Cyan
@@ -49,10 +52,68 @@ function Start-CheatScan {
         }
     }
 
-    # Send webhook
-    Send-Webhook -FlaggedMods $FlaggedMods -TotalMods $totalMods
+    # Final webhook
+    Send-FinalWebhook -FlaggedMods $FlaggedMods -TotalMods $totalMods
 
     Write-Host "`nScan completed." -ForegroundColor Green
+}
+
+# -------------------------------
+# Live webhook updates during scan
+# -------------------------------
+function Send-ProgressWebhook {
+    param(
+        [int]$Current,
+        [int]$Total,
+        [string]$CurrentMod,
+        [array]$FlaggedMods
+    )
+    if (-not $WebhookUrl) { return }
+
+    try {
+        $desc = "🔍 Scanning mods... [$Current / $Total]`nCurrently analyzing: $CurrentMod"
+        if ($FlaggedMods.Count -gt 0) {
+            $desc += "`n🚨 Flagged mods so far:`n" + ($FlaggedMods | ForEach-Object { "❌ $($_.Mod) — $($_.Reason)" }) -join "`n"
+        }
+
+        $embed = @{
+            title = "CrystalPVPJarScanner - Live Progress"
+            color = 16776960 # yellow
+            description = $desc
+        }
+
+        $payload = @{ embeds = @($embed) } | ConvertTo-Json -Depth 5
+        Invoke-RestMethod -Uri $WebhookUrl -Method PATCH -Body $payload -ContentType "application/json"
+    } catch {}
+}
+
+# -------------------------------
+# Final webhook after scan
+# -------------------------------
+function Send-FinalWebhook {
+    param(
+        [array]$FlaggedMods,
+        [int]$TotalMods
+    )
+    if (-not $WebhookUrl) { return }
+
+    try {
+        $desc = if ($FlaggedMods.Count -eq 0) {
+            "✅ All $TotalMods mods scanned. No suspicious mods detected."
+        } else {
+            "🚨 Suspicious mods detected ($($FlaggedMods.Count) of $TotalMods):`n" +
+            ($FlaggedMods | ForEach-Object { "❌ $($_.Mod) — $($_.Reason)" }) -join "`n"
+        }
+
+        $embed = @{
+            title = "CrystalPVPJarScanner - Scan Completed"
+            color = if ($FlaggedMods.Count -eq 0) { 65280 } else { 16711680 }
+            description = $desc
+        }
+
+        $payload = @{ embeds = @($embed) } | ConvertTo-Json -Depth 5
+        Invoke-RestMethod -Uri $WebhookUrl -Method POST -Body $payload -ContentType "application/json"
+    } catch {}
 }
 
 # -------------------------------
@@ -73,7 +134,7 @@ function Get-RunningMinecraftPath {
 }
 
 # -------------------------------
-# Analyze a single mod
+# Analyze single mod
 # -------------------------------
 function Analyze-Mod {
     param([string]$JarPath, [string]$ModName)
@@ -125,7 +186,7 @@ function Get-ModrinthSize {
 }
 
 # -------------------------------
-# Known cheat packages
+# Cheat signatures
 # -------------------------------
 function Get-CheatSignatures {
     return @(
@@ -134,32 +195,6 @@ function Get-CheatSignatures {
 }
 
 # -------------------------------
-# Discord webhook with progress
-# -------------------------------
-function Send-Webhook {
-    param([array]$FlaggedMods, [int]$TotalMods)
-    if (-not $WebhookUrl) { return }
-
-    try {
-        $description = if ($FlaggedMods.Count -eq 0) {
-            "✅ All $TotalMods mods scanned. No suspicious mods detected."
-        } else {
-            "🚨 Suspicious mods detected (`$($FlaggedMods.Count)` of $TotalMods):`n" +
-            ($FlaggedMods | ForEach-Object { "❌ $($_.Mod) — $($_.Reason)" }) -join "`n"
-        }
-
-        $embed = @{
-            title = "CrystalPVPJarScanner - Scan Report"
-            color = if ($FlaggedMods.Count -eq 0) { 65280 } else { 16711680 }
-            description = $description
-        }
-
-        $payload = @{ embeds = @($embed) } | ConvertTo-Json -Depth 5
-        Invoke-RestMethod -Uri $WebhookUrl -Method POST -Body $payload -ContentType "application/json"
-    } catch {}
-}
-
-# -------------------------------
-# Start scan
+# Start scanning
 # -------------------------------
 Start-CheatScan
