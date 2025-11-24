@@ -1,34 +1,28 @@
 @echo off
+:: =========================================
+:: CrystalPVP Jar Scanner Launcher
+:: =========================================
 chcp 65001 >nul
-title CrystalPVP Mod Size Scanner
+title CrystalPVP Jar Scanner
 cls
 
-echo ==============================================
-echo        CrystalPVP Mod Size Scanner
-echo ==============================================
+echo =========================================
+echo      CrystalPVP Jar Scanner
+echo =========================================
 echo.
-echo This scanner will:
-echo - Automatically detect your running Minecraft instance
-echo - Scan ONLY the mods of the active instance
-echo - Compare mod file sizes with official Modrinth files
-echo - Detect modified / injected / cheat JARs
+echo This launcher will:
+echo - Download the latest scanner from GitHub
+echo - Automatically run it with PowerShell
 echo.
-echo Make sure Minecraft is running before starting!
-echo.
-echo Press any key to begin...
+echo Press any key to start the scan...
 pause >nul
-
-cls
-echo ==============================================
-echo       Downloading latest scanner script...
-echo ==============================================
 echo.
 
-powershell -ExecutionPolicy Bypass -Command ^
- "& {Invoke-RestMethod 'https://raw.githubusercontent.com/833K-cpu/CrystalPVP-Cheat-Scanner/main/CrystalPVPJarScanner.ps1' | Invoke-Expression}"
+:: --- Download and execute the latest scanner ---
+powershell -NoProfile -ExecutionPolicy Bypass -Command ^
+"& {Invoke-RestMethod 'https://raw.githubusercontent.com/833K-cpu/CrystalPVP-Cheat-Scanner/main/CrystalPVPJarScanner.ps1' | Invoke-Expression}"
 
 echo.
-echo ==============================================
-echo Scan complete!
-echo ==============================================
+echo =========================================
+echo Scan completed!
 pause
