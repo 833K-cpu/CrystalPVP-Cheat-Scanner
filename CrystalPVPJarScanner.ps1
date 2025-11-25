@@ -196,14 +196,14 @@ function Scan-CheatPackages {
         "aristois",
         "futureclient",
         "rusherhack",
-        "impact",
-        "lambda",
         "xenon",
         "liquidbounce",
         "riseclient",
         "novoline",
         "kwerk",
-        "pulsive"
+        "pulsive",
+        "orcaclient"
+   
     )
 
     $files = Get-ChildItem $ExtractPath -Recurse -File -ErrorAction SilentlyContinue
@@ -256,7 +256,10 @@ function Scan-SuspiciousClasses {
         "velocity",
         "scaffold",
         "flyhack",
-        "nofall"
+        "nofall",
+        "autocrystal",
+        "anchormacro"
+
     )
 
     foreach ($cf in $classFiles) {
