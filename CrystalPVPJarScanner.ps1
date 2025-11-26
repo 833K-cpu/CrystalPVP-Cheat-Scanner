@@ -355,7 +355,6 @@ function Scan-SuspiciousClasses {
 "Aristoris",
 "Francium",
 "Skligga",
-"Freecam",
 "Platinium",
 "Self de",
 "coffe" ,
