@@ -249,7 +249,6 @@ function Scan-CheatPackages {
 "Aristoris",
 "Francium",
 "Skligga",
-"Freecam",
 "Platinium",
 "Self de",
 "coffe" ,
