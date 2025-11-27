@@ -5,8 +5,31 @@
 $ErrorActionPreference = "SilentlyContinue"
 
 function Start-CheatScan {
-    Write-Host "=== CrystalPVPJarScanner ===" -ForegroundColor Cyan
-    Write-Host "Scan started: $(Get-Date)" -ForegroundColor Yellow
+    Clear-Host
+    Write-Host "833K´s Cheat Analyser" -ForegroundColor Yellow
+    Write-Host "Made by " -ForegroundColor DarkGray -NoNewline
+    Write-Host "833K" -ForegroundColor White
+    Write-Host ""
+
+    # --- Minecraft uptime info (like Habibi design) ---
+    $process = Get-Process javaw -ErrorAction SilentlyContinue
+    if (-not $process) {
+        $process = Get-Process java -ErrorAction SilentlyContinue
+    }
+
+    if ($process) {
+        try {
+            $p = $process | Select-Object -First 1
+            $startTime = $p.StartTime
+            $elapsedTime = (Get-Date) - $startTime
+
+            Write-Host "{ Minecraft Uptime }" -ForegroundColor DarkCyan
+            Write-Host "$($p.Name) PID $($p.Id) started at $startTime and running for $($elapsedTime.Hours)h $($elapsedTime.Minutes)m $($elapsedTime.Seconds)s"
+            Write-Host ""
+        } catch {}
+    }
+
+    Write-Host "Searching for running Minecraft instance..." -ForegroundColor DarkGray
 
     $mcPath = Get-RunningMinecraftPath
     if (-not $mcPath) {
@@ -33,52 +56,63 @@ function Start-CheatScan {
     }
 
     Write-Host ""
-    Write-Host "Detected Minecraft instance:" -ForegroundColor Green
-    Write-Host "   $mcPath"
+    Write-Host "{ Detected Minecraft Instance }" -ForegroundColor DarkCyan
+    Write-Host "GameDir: $mcPath" -ForegroundColor Green
     Write-Host ""
-    Write-Host "Scanning mods in:" -ForegroundColor Green
-    Write-Host "   $modsPath"
+    Write-Host "{ Mods Folder }" -ForegroundColor DarkCyan
+    Write-Host "$modsPath" -ForegroundColor Green
     Write-Host ""
 
-    $total = $modFiles.Count
-    $index = 0
+    $total   = $modFiles.Count
+    $counter = 0
+    $spinner = @("|", "/", "-", "\")
     $flagged = @()
+    $clean   = @()
 
+    # --------- Scanning with spinner (Habibi style) ---------
     foreach ($mod in $modFiles) {
-        $index++
-        Write-Host "Analyzing mods... [ $index / $total ] $($mod.Name)" -ForegroundColor Cyan
+        $counter++
+        $spin = $spinner[$counter % $spinner.Length]
+
+        Write-Host "`r[$spin] Scanning mods: $counter / $total" -ForegroundColor Yellow -NoNewline
 
         $result = Analyze-Mod -JarPath $mod.FullName -ModName $mod.Name
 
         if ($result.IsSuspicious) {
-            Write-Host "  -> 🚨 FLAGGED: $($result.Reason)" -ForegroundColor Red
             $flagged += $result
         } else {
-            Write-Host "  -> ✅ Clean" -ForegroundColor Green
+            $clean += $result
         }
+    }
 
+    # Clear spinner line
+    Write-Host "`r$(' ' * 80)`r" -NoNewline
+    Write-Host ""
+
+    # ---------- Summary (Habibi style sections) ----------
+    if ($clean.Count -gt 0) {
+        Write-Host "{ Clean Mods }" -ForegroundColor DarkCyan
+        foreach ($m in $clean) {
+            Write-Host ("> {0,-40}" -f $m.ModName) -ForegroundColor Green
+        }
         Write-Host ""
     }
 
-    # ---------- Summary ----------
-    Write-Host "==========================================" -ForegroundColor Cyan
-    Write-Host "              SCAN RESULTS                " -ForegroundColor Cyan
-    Write-Host "==========================================" -ForegroundColor Cyan
-    Write-Host "Mods scanned:    $total" -ForegroundColor White
-    Write-Host "Suspicious mods: $($flagged.Count)" -ForegroundColor Yellow
-    Write-Host ""
-
-    if ($flagged.Count -eq 0) {
-        Write-Host "✅ No suspicious mods detected." -ForegroundColor Green
-    } else {
+    if ($flagged.Count -gt 0) {
+        Write-Host "{ Cheat Mods }" -ForegroundColor DarkCyan
         foreach ($m in $flagged) {
-            Write-Host "❌ $($m.ModName)" -ForegroundColor Red
-            Write-Host "   Reason: $($m.Reason)" -ForegroundColor Yellow
+            Write-Host "> $($m.ModName)" -ForegroundColor Red
+            Write-Host "   Reason: $($m.Reason)" -ForegroundColor DarkMagenta
             if ($m.Hits -and $m.Hits.Count -gt 0) {
                 Write-Host "   Hits:   $($m.Hits -join ', ')" -ForegroundColor DarkYellow
             }
-            Write-Host ""
         }
+        Write-Host ""
+    }
+
+    if ($flagged.Count -eq 0) {
+        Write-Host "✅ No suspicious mods detected." -ForegroundColor Green
+        Write-Host ""
     }
 
     Write-Host "Scan finished at: $(Get-Date)" -ForegroundColor Yellow
@@ -204,56 +238,55 @@ function Scan-CheatPackages {
         "pulsive",
         "orcaclient",
         "GetTargetMargian",
-"ucoz",
-"bleachhack_outline",
-"Bad at the game? Try Lumina Client (luminaclient.com)",
-"Geteventbutton",
-"GetTargetM",
-"/net/wurstclient/hacks/ChatTranslatorHack.class",
-"3m!",
-"s)B!",
-"Jc]hdYo",
-"tsEK$",
-"hYx%J",
-"nXw]s",
-"6jc]Ku",
-".lattia",
-"noweakattack",
-"nursultan",
-"p~,R",
-"B6&@",
-"rm &%",
-"e `9CZ",
-"vEwimWC",
-"988697",
-"GuqD$",
-"YPBC",
-"hitbox > exp",
-"Achilles",
-"st/mixin/KeyboardMixin",
-"self d",
-"gettargetmargain",
-"bleachhack_outline",
-"ucoz",
-"florens",
-"YZWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW",
-"geteventbutton",
-"]Ue8",
-"Onyx",
-"Wurst",
-"Meteor",
-"Hitboxes",
-"Vape",
-"Ares",
-"Aids Hack",
-"Aristoris",
-"Francium",
-"Skligga",
-"Platinium",
-"Self de",
-"coffe" ,
-"#]!}"
-   
+        "ucoz",
+        "bleachhack_outline",
+        "Bad at the game? Try Lumina Client (luminaclient.com)",
+        "Geteventbutton",
+        "GetTargetM",
+        "/net/wurstclient/hacks/ChatTranslatorHack.class",
+        "3m!",
+        "s)B!",
+        "Jc]hdYo",
+        "tsEK$",
+        "hYx%J",
+        "nXw]s",
+        "6jc]Ku",
+        ".lattia",
+        "noweakattack",
+        "nursultan",
+        "p~,R",
+        "B6&@",
+        "rm &%",
+        "e `9CZ",
+        "vEwimWC",
+        "988697",
+        "GuqD$",
+        "YPBC",
+        "hitbox > exp",
+        "Achilles",
+        "st/mixin/KeyboardMixin",
+        "self d",
+        "gettargetmargain",
+        "bleachhack_outline",
+        "ucoz",
+        "florens",
+        "YZWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW",
+        "geteventbutton",
+        "]Ue8",
+        "Onyx",
+        "Wurst",
+        "Meteor",
+        "Hitboxes",
+        "Vape",
+        "Ares",
+        "Aids Hack",
+        "Aristoris",
+        "Francium",
+        "Skligga",
+        "Platinium",
+        "Self de",
+        "coffe",
+        "#]!"
     )
 
     $files = Get-ChildItem $ExtractPath -Recurse -File -ErrorAction SilentlyContinue
@@ -308,57 +341,56 @@ function Scan-SuspiciousClasses {
         "flyhack",
         "nofall",
         "autocrystal",
-        "anchormacro"
+        "anchormacro",
         "ucoz",
-"bleachhack_outline",
-"Bad at the game? Try Lumina Client (luminaclient.com)",
-"Geteventbutton",
-"GetTargetM",
-"/net/wurstclient/hacks/ChatTranslatorHack.class",
-"3m!",
-"s)B!",
-"Jc]hdYo",
-"tsEK$",
-"hYx%J",
-"nXw]s",
-"6jc]Ku",
-".lattia",
-"noweakattack",
-"nursultan",
-"p~,R",
-"B6&@",
-"rm &%",
-"e `9CZ",
-"vEwimWC",
-"988697",
-"GuqD$",
-"YPBC",
-"hitbox > exp",
-"Achilles",
-"st/mixin/KeyboardMixin",
-"self d",
-"gettargetmargain",
-"bleachhack_outline",
-"ucoz",
-"florens",
-"YZWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW",
-"geteventbutton",
-"]Ue8",
-"Onyx",
-"Wurst",
-"Meteor",
-"Hitboxes",
-"Vape",
-"Ares",
-"Aids Hack",
-"Aristoris",
-"Francium",
-"Skligga",
-"Platinium",
-"Self de",
-"coffe" ,
-"#]!}"
-
+        "bleachhack_outline",
+        "Bad at the game? Try Lumina Client (luminaclient.com)",
+        "Geteventbutton",
+        "GetTargetM",
+        "/net/wurstclient/hacks/ChatTranslatorHack.class",
+        "3m!",
+        "s)B!",
+        "Jc]hdYo",
+        "tsEK$",
+        "hYx%J",
+        "nXw]s",
+        "6jc]Ku",
+        ".lattia",
+        "noweakattack",
+        "nursultan",
+        "p~,R",
+        "B6&@",
+        "rm &%",
+        "e `9CZ",
+        "vEwimWC",
+        "988697",
+        "GuqD$",
+        "YPBC",
+        "hitbox > exp",
+        "Achilles",
+        "st/mixin/KeyboardMixin",
+        "self d",
+        "gettargetmargain",
+        "bleachhack_outline",
+        "ucoz",
+        "florens",
+        "YZWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW",
+        "geteventbutton",
+        "]Ue8",
+        "Onyx",
+        "Wurst",
+        "Meteor",
+        "Hitboxes",
+        "Vape",
+        "Ares",
+        "Aids Hack",
+        "Aristoris",
+        "Francium",
+        "Skligga",
+        "Platinium",
+        "Self de",
+        "coffe",
+        "#]!"
     )
 
     foreach ($cf in $classFiles) {
